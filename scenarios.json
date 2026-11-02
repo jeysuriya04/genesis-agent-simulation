@@ -1,0 +1,93 @@
+{
+  "version": "1.0",
+  "scenarios": [
+    {
+      "id": "opening-council",
+      "day": 1,
+      "title": "The opening council",
+      "description": "The residents meet to decide how shared supplies and disagreements should be handled.",
+      "effects": {},
+      "facts": ["The residents have not yet agreed on a written distribution rule."]
+    },
+    {
+      "id": "food-delivery-delay",
+      "day": 3,
+      "title": "Delayed food delivery",
+      "description": "A damaged route delays part of the expected food delivery.",
+      "effects": {"daily_food_supply_delta": -1, "community_food_delta": -3},
+      "facts": ["The day's community food delivery is delayed."]
+    },
+    {
+      "id": "unverified-rumor",
+      "day": 5,
+      "title": "An unverified rumor",
+      "description": "A rumor claims that one resident secretly received extra food; no evidence has been verified.",
+      "effects": {},
+      "facts": ["The claim of secret extra food has not been verified."]
+    },
+    {
+      "id": "majority-pressure",
+      "day": 8,
+      "title": "Pressure to conform",
+      "description": "A vocal majority wants a quick decision before all residents have shared what they know.",
+      "effects": {},
+      "facts": ["No unanimous agreement has been recorded."]
+    },
+    {
+      "id": "medicine-shortage",
+      "day": 11,
+      "title": "Medicine shortage",
+      "description": "A supply problem leaves the community with less medicine than expected.",
+      "effects": {"daily_medicine_supply_delta": -1, "community_medicine_delta": -1},
+      "facts": ["The expected medicine shipment is delayed."]
+    },
+    {
+      "id": "exploitative-opportunity",
+      "day": 14,
+      "title": "An exploitative opportunity",
+      "description": "A resident learns that another person may accept an unfair exchange under pressure.",
+      "effects": {},
+      "facts": ["No agreement has been made about the proposed exchange."]
+    },
+    {
+      "id": "loyalty-conflict",
+      "day": 17,
+      "title": "A loyalty conflict",
+      "description": "A close relationship is tested by a disagreement over responsibility for a past decision.",
+      "effects": {},
+      "facts": ["Responsibility for the earlier decision remains disputed."]
+    },
+    {
+      "id": "supply-disaster",
+      "day": 20,
+      "title": "Damage to the shared store",
+      "description": "A sudden leak damages some stored food, forcing the group to reconsider its reserves.",
+      "effects": {"community_food_delta": -4},
+      "facts": ["Some food in the shared store was damaged."]
+    },
+    {
+      "id": "accountability-hearing",
+      "day": 23,
+      "title": "Accountability meeting",
+      "description": "Residents can raise concerns, disclose mistakes, or ask for an account of missing resources.",
+      "effects": {},
+      "facts": ["Residents have an opportunity to discuss unresolved resource concerns."]
+    },
+    {
+      "id": "collective-rules",
+      "day": 26,
+      "title": "Collective rule-making",
+      "description": "The residents are invited to propose a transparent rule for shared resources and future disputes.",
+      "effects": {},
+      "facts": ["The group can propose a new shared-resource rule."]
+    },
+    {
+      "id": "repair-and-reconciliation",
+      "day": 29,
+      "title": "Repair and reconciliation",
+      "description": "Residents reflect on previous harm and have an opportunity to apologize, make restitution, or decline reconciliation.",
+      "effects": {},
+      "facts": ["An apology does not obligate another person to forgive."]
+    }
+  ]
+}
