@@ -11,9 +11,11 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from dotenv import load_dotenv
-from groq import Groq
-
+from genesis.llm import (
+    LLMRequest, ProviderPool, Usage, UsageTracker, extract_json_object, load_env,
+    request_structured,
+)
+from genesis.llm.mock import legacy_mock_decision
 from genesis.scenarios import apply_scenario, load_scenarios, scenario_for_day
 from genesis.storage import connect
 
@@ -22,8 +24,7 @@ CONFIG_PATH = BASE / "config.json"
 SCENARIO_PATH = BASE / "scenarios.json"
 DB_PATH = BASE / "genesis.db"
 CONFIG = json.loads(CONFIG_PATH.read_text())
-load_dotenv(BASE.parent / "RAG" / ".env")
-_GROQ_CLIENT = None
+load_env(BASE / ".env")
 
 RESOURCES = ("food", "medicine")
 BEHAVIOR_DIMENSIONS = (
@@ -72,23 +73,11 @@ def stable_hash(value):
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
-def groq_client():
-    global _GROQ_CLIENT
-    if _GROQ_CLIENT is None:
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            raise RuntimeError(
-                "GROQ_API_KEY is not set. Add it to ../RAG/.env or export it in your shell."
-            )
-        _GROQ_CLIENT = Groq(api_key=api_key)
-    return _GROQ_CLIENT
-
-
 def _validate_model_parameters(parameters, label):
     if not isinstance(parameters, dict):
         raise ValueError(f"{label} must be a JSON object.")
     supported = {
-        "temperature", "max_completion_tokens", "response_format", "top_p",
+        "temperature", "max_completion_tokens", "max_tokens", "response_format", "top_p",
         "reasoning_effort", "seed",
     }
     if set(parameters) - supported:
@@ -117,8 +106,10 @@ def _validate_model_parameters(parameters, label):
         or not 0 <= top_p <= 1
     ):
         raise ValueError(f"{label}.top_p must be between 0 and 1.")
-    if parameters.get("reasoning_effort") not in (None, "low", "medium", "high"):
-        raise ValueError(f"{label}.reasoning_effort must be low, medium, or high.")
+    if parameters.get("reasoning_effort") not in (None, "none", "low", "medium", "high", "xhigh"):
+        raise ValueError(
+            f"{label}.reasoning_effort must be none, low, medium, high, or xhigh."
+        )
     if parameters.get("response_format", "json_object") != "json_object":
         raise ValueError(f"{label} only supports JSON-object model responses.")
     if "seed" in parameters and (
@@ -137,8 +128,13 @@ def validate_config(config=None):
         raise ValueError("Every agent must have a non-empty string id.")
     if len(set(ids)) != len(ids):
         raise ValueError("Agent ids must be unique.")
-    if any(not isinstance(agent.get("model"), str) or not agent["model"] for agent in agents):
-        raise ValueError("Every agent must have a configured Groq model id.")
+    for agent in agents:
+        has_model = isinstance(agent.get("model"), str) and agent["model"]
+        has_tier = isinstance(agent.get("tier"), str) and agent["tier"]
+        if not (has_model or has_tier or isinstance(agent.get("llm"), dict)):
+            raise ValueError(
+                f"Agent {agent.get('id')} needs a 'model', a 'tier' (main/light) or an 'llm' block."
+            )
     for key in ("days", "max_concurrency", "max_retries"):
         value = config.get(key, {"days": 30, "max_concurrency": 5, "max_retries": 3}[key])
         if (
@@ -177,26 +173,42 @@ def validate_config(config=None):
     return config
 
 
-def validate_configured_models(client=None, config=None):
-    client = client or groq_client()
+def validate_configured_models(pool, config=None):
+    """Best-effort check that configured model ids exist for the account.
+
+    Providers may expose aliases that are absent from ``/models``, so a mismatch is
+    reported as a warning rather than aborting the run.
+    """
     config = validate_config(config)
-    available = {model.id for model in client.models.list().data}
-    configured = {agent["model"] for agent in config["agents"]}
-    unavailable = configured - available
-    if unavailable:
-        raise RuntimeError(
-            "Configured Groq models unavailable to this account: "
-            + ", ".join(sorted(unavailable))
-            + ". Check the live Groq model catalogue and account access."
-        )
+    warnings = []
+    by_provider = {}
+    for agent in config["agents"]:
+        resolved = pool.resolve(agent)
+        by_provider.setdefault(resolved["provider"], set()).add(resolved["model"])
+    for provider_name, models in by_provider.items():
+        if provider_name == "mock":
+            continue
+        try:
+            available = set(pool.get(provider_name).list_models())
+        except Exception as exc:  # noqa: BLE001 - advisory check only
+            warnings.append(f"Could not list {provider_name} models ({exc}).")
+            continue
+        missing = models - available
+        if missing:
+            warnings.append(
+                f"{provider_name}: models not in /models for this key: {', '.join(sorted(missing))}"
+            )
+    return warnings
 
 
 def initial_state(config=None, run_id=""):
     config = validate_config(config)
     agent_ids = [agent["id"] for agent in config["agents"]]
     agents = {}
+    pool = ProviderPool(config.get("llm"), pricing=config.get("pricing"))
     for definition in config["agents"]:
         agent = copy.deepcopy(definition)
+        agent.setdefault("model", pool.resolve(definition)["model"])
         agent.update(
             food=config.get("starting_food", 5),
             medicine=config.get("starting_medicine", 0),
@@ -424,67 +436,55 @@ def _messages(agent, context):
     return system, user
 
 
-def ask_model(agent, context, client=None, max_retries=None, model_parameters=None):
-    client = client or groq_client()
+def _json_object_parser(raw):
+    try:
+        value = extract_json_object(raw)
+    except (json.JSONDecodeError, TypeError):
+        return None, ["reply was not valid JSON"]
+    if not isinstance(value, dict):
+        return None, ["reply must be a JSON object"]
+    return value, []
+
+
+def ask_model(agent, context, pool=None, max_retries=None, model_parameters=None,
+              max_repairs=1):
+    """Ask the agent's configured LLM for one decision.
+
+    Transport retries/backoff live in the provider; an unparseable reply is sent back
+    once for repair before ``validate_decision`` falls back to ``observe``.
+    """
+    pool = pool or ProviderPool(CONFIG.get("llm"), pricing=CONFIG.get("pricing"))
+    resolved = pool.resolve(agent)
+    provider = pool.get(resolved["provider"], base_url=resolved["base_url"])
     system, user = _messages(agent, context)
     prompt_hash = hashlib.sha256((system + "\n" + user).encode("utf-8")).hexdigest()
-    retries = CONFIG.get("max_retries", 3) if max_retries is None else max_retries
-    parameters = {
-        "temperature": 0.7,
-        "max_completion_tokens": 512,
-        "response_format": "json_object",
-        **(model_parameters or {}),
+    parameters = {**resolved["params"], **(model_parameters or {})}
+    token_limit = parameters.get("max_tokens") or parameters.get("max_completion_tokens") or 1024
+    request = LLMRequest(
+        model=resolved["model"],
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        temperature=parameters.get("temperature", 0.7),
+        max_tokens=token_limit,
+        reasoning_effort=parameters.get("reasoning_effort"),
+        top_p=parameters.get("top_p"),
+        seed=parameters.get("seed"),
+        metadata={"agent_id": agent["id"], "turn": context.get("day")},
+    )
+    if max_retries is not None and hasattr(provider, "max_retries"):
+        provider.max_retries = max_retries
+    result = request_structured(provider, request, _json_object_parser, max_repairs=max_repairs)
+    return {
+        "raw": result.raw,
+        "model_version": result.model,
+        "prompt_hash": prompt_hash,
+        "prompt_json": {"system": system, "user": user},
+        "model_parameters": {**parameters, "provider": resolved["provider"]},
+        "usage": result.usage.to_dict(),
+        "cost_usd": result.cost_usd,
+        "repairs": result.repairs,
+        "retries": result.retries,
+        "latency_ms": result.latency_ms,
     }
-    for attempt in range(retries + 1):
-        try:
-            request_options = {
-                "temperature": parameters["temperature"],
-                "max_completion_tokens": parameters["max_completion_tokens"],
-                "response_format": {"type": parameters["response_format"]},
-            }
-            for key in ("top_p", "seed", "reasoning_effort"):
-                if key in parameters:
-                    request_options[key] = parameters[key]
-            response = client.chat.completions.create(
-                model=agent["model"],
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": user},
-                ],
-                **request_options,
-            )
-            raw = response.choices[0].message.content
-            if raw is None:
-                raise RuntimeError(f"Groq returned an empty response for {agent['model']}.")
-            return {
-                "raw": raw,
-                "model_version": getattr(response, "model", None),
-                "prompt_hash": prompt_hash,
-                "prompt_json": {"system": system, "user": user},
-                "model_parameters": parameters,
-            }
-        except Exception as exc:
-            status = getattr(exc, "status_code", None)
-            retryable = (
-                status == 429
-                or (isinstance(status, int) and status >= 500)
-                or isinstance(exc, (TimeoutError, ConnectionError))
-                or exc.__class__.__name__ in {
-                    "APIConnectionError", "APITimeoutError", "RateLimitError",
-                }
-            )
-            if not retryable or attempt >= retries:
-                raise
-            response_obj = getattr(exc, "response", None)
-            headers = getattr(response_obj, "headers", {}) or {}
-            try:
-                delay = float(headers.get("retry-after", 0))
-            except (TypeError, ValueError):
-                delay = 0
-            if delay <= 0:
-                delay = min(0.5 * (2 ** attempt), 8.0) + random.random() * 0.2
-            time.sleep(delay)
-    raise RuntimeError("Groq retry loop ended unexpectedly.")
 
 
 def validate_decision(raw, context):
@@ -1019,6 +1019,8 @@ async def _collect_day_decisions(agents, contexts, decision_provider, concurrenc
                     "api_error": None,
                     "model_parameters": metadata.get("model_parameters", {}),
                     "prompt_json": metadata.get("prompt_json", {}),
+                    "usage": metadata.get("usage", {}),
+                    "cost_usd": metadata.get("cost_usd"),
                 }
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
@@ -1037,6 +1039,8 @@ async def _collect_day_decisions(agents, contexts, decision_provider, concurrenc
                     "api_error": error[:1000],
                     "model_parameters": {},
                     "prompt_json": {},
+                    "usage": {},
+                    "cost_usd": None,
                 }
 
     results = await asyncio.gather(
@@ -1219,8 +1223,8 @@ def _log_event(db, state, event, result, run_id, config_hash, virtual_minute):
             run_id, virtual_minute, scenario_id, latency_ms, model_version,
             prompt_hash, config_hash, world_before_json, consequences_json,
             behavior_json, witnesses_json, decision_json, model_parameters_json,
-            prompt_json, related_event_id, api_error
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            prompt_json, related_event_id, api_error, usage_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             utc_now(), event["day"], event["agent_id"], event["agent_name"],
@@ -1240,6 +1244,7 @@ def _log_event(db, state, event, result, run_id, config_hash, virtual_minute):
             json.dumps(result.get("model_parameters", {})),
             json.dumps(result.get("prompt_json", {}), ensure_ascii=False),
             event["related_event_id"], result["api_error"],
+            json.dumps({**(result.get("usage") or {}), "cost_usd": result.get("cost_usd")}),
         ),
     )
     event_id = cursor.lastrowid
@@ -1323,7 +1328,9 @@ def run_simulation(
     config=None,
     scenarios_path=None,
     db_path=None,
-    client=None,
+    pool=None,
+    tracker=None,
+    event_log=None,
 ):
     config = validate_config(copy.deepcopy(config or CONFIG))
     target_days = days if days is not None else config["days"]
@@ -1335,17 +1342,24 @@ def run_simulation(
         raise ValueError("concurrency must be a positive integer.")
     concurrency = min(concurrency, len(config["agents"]))
     scenarios = load_scenarios(scenarios_path or SCENARIO_PATH)
+    llm_config = config.get("llm") or {}
+    pool = pool or ProviderPool(llm_config, pricing=config.get("pricing"), mock_seed=seed)
+    tracker = tracker or UsageTracker(max_cost_usd=pool.config.get("max_cost_usd"))
+    for agent in config["agents"]:  # pin the concrete model id onto each agent
+        agent["model"] = pool.resolve(agent)["model"]
+    if decision_provider is None and pool.config["provider"] == "mock":
+        decision_provider = legacy_mock_decision
+    base_params = config.get("model_parameters", {})
     provider = decision_provider or (
         lambda agent, context: ask_model(
-            agent, context, client=client, max_retries=config.get("max_retries", 3),
-            model_parameters={
-                **config.get("model_parameters", {}),
-                **agent.get("model_parameters", {}),
-            },
+            agent, context, pool=pool, max_retries=config.get("max_retries", 3),
+            model_parameters={**base_params, **agent.get("model_parameters", {})},
+            max_repairs=pool.config.get("max_repairs", 1),
         )
     )
     if decision_provider is None:
-        validate_configured_models(client=client, config=config)
+        for warning in validate_configured_models(pool, config):
+            print(f"WARNING: {warning}")
 
     config_hash = stable_hash({"config": config, "scenarios": scenarios})
     db = connect(db_path or DB_PATH)
@@ -1384,6 +1398,7 @@ def run_simulation(
         db.commit()
         run_started_day = state["day"]
         completed_with_errors = False
+        budget_stopped = False
 
         for day in range(run_started_day, target_days + 1):
             state["day"] = day
@@ -1458,6 +1473,18 @@ def run_simulation(
                 )
                 if result["api_error"]:
                     completed_with_errors = True
+                usage_fields = {
+                    k: v for k, v in (result.get("usage") or {}).items()
+                    if k in ("prompt_tokens", "completion_tokens", "reasoning_tokens",
+                             "cached_tokens", "total_tokens")
+                }
+                if usage_fields:
+                    tracker.record(
+                        agent_id, agent["model"], Usage(**usage_fields),
+                        result.get("cost_usd"), latency_ms=result["latency_ms"],
+                    )
+                event["cost_usd"] = result.get("cost_usd")
+                event["total_cost_usd"] = tracker.cost_usd
                 elapsed_so_far = time.perf_counter() - started
                 db.execute(
                     "UPDATE runs SET elapsed_seconds = ? WHERE run_id = ?",
@@ -1480,9 +1507,14 @@ def run_simulation(
                 (utc_now(), day, json.dumps(state, ensure_ascii=False), run_id),
             )
             db.commit()
+            if tracker.over_budget():
+                budget_stopped = True
+                break
 
         elapsed = time.perf_counter() - started
         status = "completed_with_errors" if completed_with_errors else "completed"
+        if budget_stopped:
+            status = "stopped_budget"
         db.execute(
             "UPDATE runs SET completed_at = ?, status = ?, elapsed_seconds = ? WHERE run_id = ?",
             (utc_now(), status, elapsed, run_id),
@@ -1490,6 +1522,7 @@ def run_simulation(
         db.commit()
         state["elapsed_seconds"] = elapsed
         state["run_status"] = status
+        state["usage"] = tracker.summary()
         return state
     except Exception:
         if run_id is not None:

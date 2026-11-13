@@ -21,6 +21,7 @@ EVENT_COLUMNS = {
     "api_error": "TEXT",
     "review_status": "TEXT NOT NULL DEFAULT 'unreviewed'",
     "review_notes": "TEXT",
+    "usage_json": "TEXT NOT NULL DEFAULT '{}'",
 }
 
 
