@@ -3,8 +3,8 @@
 ## 1. Purpose and scope
 
 GENESIS is a Python prototype for observing decisions and social dynamics in a
-small artificial society. Five configured agents use Groq-hosted language
-models to propose actions. The simulation engine—not the language model—checks
+small artificial society. Five configured agents use xAI Grok language
+models (via a provider-neutral LLM layer) to propose actions. The simulation engine—not the language model—checks
 those proposals, applies the world rules, updates resources and relationships,
 and stores the resulting evidence in SQLite. The replay showcase reads that
 database to provide an experiment observatory.
@@ -30,7 +30,7 @@ run.py
               ├─ supply resources, consume needs, update health
               ├─ record a WORLD event
               ├─ freeze a shared start-of-decision snapshot
-              ├─ request five Groq decisions concurrently
+              ├─ request five model decisions concurrently
               ├─ validate and resolve them in seeded order
               ├─ record each decision and its consequences
               └─ save an end-of-day snapshot
@@ -44,7 +44,7 @@ Core files:
 | `run.py` | Command-line options, progress output, and simulation invocation |
 | `config.json` | Agent identities, model assignments, inference settings, and world resources |
 | `scenarios.json` | Versioned day-by-day scenario descriptions, facts, and supported supply effects |
-| `genesis/simulation.py` | World state, Groq requests, validation, action resolution, and the virtual-day loop |
+| `genesis/simulation.py` | World state, model requests (via `genesis/llm`), validation, action resolution, and the virtual-day loop |
 | `genesis/scenarios.py` | Scenario schedule validation and effect application |
 | `genesis/storage.py` | Additive SQLite schema migration and database connection |
 | `genesis.db` | Persistent experiment runs, events, snapshots, and propagation links |
@@ -74,8 +74,8 @@ definition, scenario version, and world-rules version. New runs append to the
 same database. Without `--reset`, the engine continues from the latest saved
 snapshot; use a fresh run when comparing experiments.
 
-The Groq API key is loaded from `../RAG/.env` relative to the project, or from
-the `GROQ_API_KEY` environment variable. The key is never part of `config.json`
+The xAI API key is loaded from `.env` in the project root, or from
+the `XAI_API_KEY` environment variable. The key is never part of `config.json`
 or this document. Before a live run, configured model IDs are checked against
 the account's available models.
 
@@ -119,12 +119,11 @@ This design means all five model requests for a day start from the same
 pre-decision world. A resident does not see another resident's action from the
 same decision batch before choosing its own action.
 
-### 4.4 Ask the configured Groq models concurrently
+### 4.4 Ask the configured Grok models concurrently
 
 Each resident is sent a system instruction and a JSON user context to its
-configured Groq model. Model assignments are independent: the current
-configuration uses three distinct model IDs across five residents, rather than
-five distinct model families. Per-model parameters can override global
+configured model (tier or explicit id). Model assignments are independent: the current
+configuration uses two model tiers (`main` and `light`) across five residents. Per-model parameters can override global
 parameters in `config.json`.
 
 The engine requests a JSON object and records the model response, prompt
@@ -261,7 +260,7 @@ active. The showcase tabs provide:
    context/model/action/consequence payload, and persistent human-review
    status and notes.
 4. **Experiment facts:** available run identifiers and a clear statement that
-   the showcase replays existing records without making Groq requests.
+   the showcase replays existing records without making model requests.
 
 The interface is a Gradio replay UI using the interaction approach of the
 [OpenBMB AgentVerse local GUI](https://github.com/OpenBMB/AgentVerse), while
@@ -312,3 +311,11 @@ The event record distinguishes:
 Do not treat a generated explanation as internal reasoning, a rule flag as a
 universal moral verdict, or a simulated behavioral pattern as evidence about
 real people.
+
+
+## Newer additions
+
+Scenario mode, the Grok provider layer and the live monitor are described in the
+[README](../README.md), [SCENARIOS.md](./SCENARIOS.md), [GROK.md](./GROK.md) and
+[MONITORING.md](./MONITORING.md). They sit alongside the flow above and reuse its design
+(shared start-of-turn snapshot, concurrent decisions, seeded resolution order).

@@ -1,6 +1,15 @@
 # Genesis: Multi-model artificial society
 
-A Python research prototype for a five-agent artificial society. Groq-hosted models propose decisions; the simulator validates and executes them, maintains shared world state, and records the complete event history in SQLite.
+A Python research prototype for multi-agent societies. **xAI Grok** models (through the OpenAI-compatible xAI API) propose decisions; the simulator validates and executes them, maintains shared world state, and records the complete event history for replay.
+
+It has two modes:
+
+1. **Scenario mode (new)**: tightly scoped, config-driven scenarios (cooperation, competition, decision-making, and mixed-motive/deception) with goals, roles, rules, resources, success/failure conditions and a hard turn limit. Four are bundled in [`scenarios/`](./scenarios). See [docs/SCENARIOS.md](./docs/SCENARIOS.md).
+2. **Society mode (original)**: the five-resident, 30-day food-and-medicine society backed by SQLite and the Gradio replay.
+
+Every run of either mode writes a structured JSONL event log that the **live monitor** shows with per-step perception, reasoning, action and effect ([docs/MONITORING.md](./docs/MONITORING.md)).
+
+![Genesis monitor](./docs/img/dashboard.png)
 
 For the complete end-to-end execution flow, data lifecycle, showcase guide, and
 the latest completed 10-day experiment summary, see
@@ -20,56 +29,85 @@ the latest completed 10-day experiment summary, see
 
 - macOS, Linux or Windows
 - Python 3.10+
-- A Groq account and API key
-- Internet access for the Groq API and Python packages
+- An xAI API key for real runs (https://console.x.ai). **Not needed** for `--mock` runs, the monitor, or the tests
+- Internet access for the xAI API and Python packages
 
 ## 1. Set up the Python project
 
 ```bash
-cd genesis_ai_society
+git clone <your repo> && cd genesis-agent-simulation
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
+cp .env.example .env               # then put your key in .env (git-ignored)
 ```
 
-The app loads `GROQ_API_KEY` from `../RAG/.env` (relative to this project). Keep your key there, or set it in your shell:
+`.env` (or your shell environment) provides the key. Keys are never read from `config.json` and `.env` is git-ignored:
 
 ```bash
-export GROQ_API_KEY="your_api_key_here"
+XAI_API_KEY=your_xai_key_here
 ```
 
-If you still need a key, create one at https://console.groq.com/keys. Do not put it in `config.json` or commit it to source control. The simulation checks the configured model IDs against the models available to your API key before it starts.
+Other providers are supported behind the same interface: `--provider groq` (`GROQ_API_KEY`), `--provider openai` (`OPENAI_API_KEY`), and `--provider mock` / `--mock` (offline, deterministic, no key). Any OpenAI-compatible endpoint works too: set `llm.provider` to `openai-compatible` and give agents an `llm.base_url` (the key is read from `OPENAI_API_KEY`).
 
-The current configuration uses three models across five agents: `openai/gpt-oss-20b`, `openai/gpt-oss-120b`, and `qwen/qwen3.8-27b`. The first two are listed as production models; Qwen3.8-27B is listed as a preview model and may change or be discontinued. Check the [Groq supported models catalogue](https://console.groq.com/docs/models) before changing assignments. Availability may vary by account.
+### Models
 
-## 2. Run the simulation
+Two tiers are defined in `config.json` under `llm.tiers`; every agent picks one with `"tier"` (or sets its own `"model"` / `"llm"` block):
 
-The clock is virtual: each loop advances one simulated day, applies the scheduled scenario and daily resource accounting, gathers one decision from each of the five agents against the same start-of-day snapshot, then validates and resolves decisions in a seeded order. There are no waits for real days to pass. A fresh 30-day run makes up to 150 Groq completion requests in concurrent daily batches (default concurrency: five).
+| Tier | Default model | Used for | Notes |
+|---|---|---|---|
+| `main` | `grok-4.7` (`reasoning_effort: medium`) | principal agents that must plan, bargain or deceive | xAI's most capable model (500k ctx, $2/$6 per 1M tokens) |
+| `light` | `grok-4.20-0309-non-reasoning` | minor/background roles | fast, no reasoning tokens, $1.25/$2.50 per 1M tokens |
 
-The five-minute target is not guaranteed: with five concurrent requests, 30 days require 30 daily batches, so each batch would need to finish in about ten seconds on average. Actual runtime depends on Groq latency, model choice, retries, and account rate limits; the CLI and showcase report measured runtime.
+Override per run: `--model-main grok-4.3 --model-light grok-4.20-0309-non-reasoning`. Rationale and alternatives: [docs/GROK.md](./docs/GROK.md). Model ids were checked against https://docs.x.ai/docs/models on 2026-11-14; re-check before long runs, since ids and prices change.
 
-Change the concurrency (and reproducibility seed) as needed:
+Agents answer with a **strict JSON-schema** action (`response_format: json_schema`, with `json_object` fallback for providers without schema support). The reply is validated against the scenario's constraint table; an invalid reply is sent back with the exact errors (up to `llm.max_repairs`, default 2) before the agent falls back to `pass` and the step is flagged. Network and rate-limit failures retry with exponential backoff and `Retry-After` support (`llm.max_retries`, default 4). Tokens (including cached and reasoning tokens) and an estimated USD cost are tracked per agent and per model; set `--max-cost 0.50` (or `llm.max_cost_usd`) to stop a run once the estimate reaches a cap.
+
+## 2. Run a scenario
 
 ```bash
-python run.py --reset --days 30 --concurrency 5 --seed 7
+python run.py --list-scenarios                 # validates and lists scenarios/*.json
+
+# With Grok (needs XAI_API_KEY):
+python run.py --scenario drought-village       # cooperation, 5 agents, 10 turns
+python run.py --scenario salt-road-market      # competition, 4 agents, 8 turns
+python run.py --scenario crater-council        # decision-making, 5 agents, 7 turns
+python run.py --scenario station-sabotage      # mixed motives + hidden saboteur, 4 agents, 8 turns
+
+# Offline, no key (deterministic mock agents):
+python run.py --scenario crater-council --mock --seed 0
+
+# Useful flags:
+#   --turns N            cap the scenario's turn limit      --seed N         resolution-order seed
+#   --max-cost USD       stop when estimated spend is hit    --concurrency N  parallel LLM calls per turn
+#   --model-main ID --model-light ID                         --provider xai|groq|openai|mock
+#   --runs-dir DIR       where event logs go (default runs/) --mock-delay S   fake latency to watch live
 ```
 
-Scenarios are configured in `scenarios.json`; schedule, wording, verifiable facts, and supported supply effects can be edited without changing simulation code. `--reset` starts a new experiment run and preserves earlier run/event history in SQLite. A fixed seed controls the action-resolution and resource-allocation order.
+Each turn all living agents decide concurrently from the same start-of-turn snapshot; the engine then validates and resolves the actions in a seeded order, applies upkeep, resolves votes, and checks the scenario's success/failure conditions. A run ends as `success`, `failure`, `timeout`, `decided` (competitive scoring at the turn limit), `aborted_budget` or `error`.
 
-Start a fresh 5-agent, 30-day experiment:
+### Open the live monitor
 
 ```bash
-python run.py --reset --days 30
+python monitor.py --runs-dir runs      # http://127.0.0.1:8765
 ```
 
-To continue from the latest saved snapshot:
+Start it before or during a run: a running scenario appears live, and finished runs replay with the slider/play controls. Details: [docs/MONITORING.md](./docs/MONITORING.md).
+
+## 2b. Run the original society simulation
+
+The clock is virtual: each loop advances one simulated day, applies the scheduled scenario and daily resource accounting, gathers one decision from each of the five agents against the same start-of-day snapshot, then validates and resolves decisions in a seeded order. There are no waits for real days to pass. A fresh 30-day run makes up to 150 completion requests in concurrent daily batches (default concurrency: five).
+
+The five-minute target is not guaranteed: with five concurrent requests, 30 days require 30 daily batches, so each batch would need to finish in about ten seconds on average. Actual runtime depends on API latency, model choice, retries, and account rate limits; the CLI and showcase report measured runtime.
 
 ```bash
-python run.py --days 30
+python run.py --reset --days 30 --concurrency 5 --seed 7     # fresh run (Grok)
+python run.py --reset --days 5 --mock                        # offline smoke test
+python run.py --days 30                                      # continue the latest snapshot
 ```
 
-The program records each agent decision, daily environment update, and post-action state in `genesis.db`. Schema upgrades are additive; existing events and snapshots are retained.
+The day-by-day schedule lives in `scenarios.json` (schedule, wording, verifiable facts and supported supply effects can be edited without code changes). `--reset` starts a new experiment run and preserves earlier run/event history in SQLite. A fixed seed controls the action-resolution and resource-allocation order. The program records each decision, daily environment update, and post-action state in `genesis.db`, and also writes `runs/<run_id>/events.jsonl` for the live monitor (`--no-events` disables that).
 
 ## 3. Open the AgentVerse-style replay showcase
 
@@ -94,7 +132,7 @@ for the framework itself.
 
 ## 4. Change agents/models
 
-Edit `config.json` and use the exact model IDs from the Groq catalogue. Agents can share models; the current catalogue does not require five distinct model families.
+Edit `config.json` (society mode) or the scenario JSON (scenario mode). Give an agent `"tier": "main"|"light"`, an explicit `"model"`, or an `"llm": {"provider": ..., "model": ..., "reasoning_effort": ...}` block. Use the exact model IDs from the provider's catalogue. Agents can share models.
 
 For a fair model comparison, keep roles, starting resources, prompts and world conditions identical across repeated runs. Swap model assignments between roles in separate experiments.
 
@@ -130,13 +168,22 @@ The `snapshots` table records end-of-day world states. The `runs` table stores s
 
 ## 8. Reproducible experiments and limitations
 
-Use separate fresh runs to compare model-to-role assignments while keeping scenario files, prompts, resource settings, and seeds controlled. Set `seed`, `model_parameters`, `world_rules_version`, and each agent's model independently in `config.json`. Model availability and account access can change; the application checks configured IDs against the live Groq catalogue before a real run.
+Use separate fresh runs to compare model-to-role assignments while keeping scenario files, prompts, resource settings, and seeds controlled. Set `seed`, `model_parameters`, `world_rules_version`, and each agent's model independently in `config.json`. Model availability and account access can change; the application lists the provider's `/models` before a real society run and warns about ids it cannot find (aliases may not be listed).
 
-The five-minute target is a performance goal, not a guarantee. A 30-day simulation makes up to 150 model requests; the automated tests use a local decision provider and do not incur Groq requests.
+The five-minute target is a performance goal, not a guarantee. A 30-day simulation makes up to 150 model requests; the automated tests use the mock provider or a local decision provider and make no network requests.
 
 ## Troubleshooting
 
-- `GROQ_API_KEY is not set`: export your key in the terminal running the simulation.
-- Configured model unavailable: check the current Groq catalogue and your account's model access, then update `config.json`.
-- Invalid model response: invalid actions are safely converted to `observe` and flagged; API failures are explicitly recorded and the run completes with an error status. Inspect the event ledger.
+- `XAI_API_KEY is not set`: copy `.env.example` to `.env` and add your key, or export it; or run offline with `--mock`.
+- HTTP 400/404 for a model: the id is wrong or your account lacks access. Check https://docs.x.ai/docs/models, then update `llm.tiers` in `config.json` or pass `--model-main`/`--model-light`. Misconfiguration (bad key/model) aborts the run instead of silently passing.
+- Empty or truncated replies from a reasoning model: raise `max_tokens` for that tier (reasoning tokens count toward the limit).
+- HTTP 429: handled with backoff; lower `--concurrency` if it persists.
+- Invalid model response: invalid actions are repaired once or converted to `observe`/`pass` and flagged; API failures are explicitly recorded and the run completes with an error status. Inspect the event ledger.
 - Start over: `python run.py --reset --days 30`.
+
+## Tests
+
+```bash
+pip install pytest
+pytest            # no API key or network needed
+```
