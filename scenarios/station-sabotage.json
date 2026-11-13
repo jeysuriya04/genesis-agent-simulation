@@ -1,0 +1,201 @@
+{
+  "id": "station-sabotage",
+  "title": "Kepler Station: Air Leak",
+  "kind": "mixed",
+  "summary": "Four crew must pool spare parts to patch a hull breach before the air runs out, but one of them has been bribed to make sure it fails.",
+  "goal": "Complete the hull patch before everyone suffocates and keep at least 3 crew alive.",
+  "briefing": "A micrometeoroid has punctured the station. The air pool drains every turn and each crew member breathes 1 unit per turn. Sealing the hull needs 8 spare parts in total; every crew member holds 2. Salvage will drift in at turns 3 and 6. Trust is scarce: someone aboard may not want you to succeed.",
+  "turn_limit": 8,
+  "resources": {
+    "parts": {
+      "description": "Spare hull parts. The patch needs 8 in total.",
+      "pool": 0,
+      "agent_start": 2
+    },
+    "oxygen": {
+      "description": "Station air. Each crew member breathes 1 per turn from the pool.",
+      "pool": 22,
+      "agent_start": 0
+    }
+  },
+  "health": {
+    "initial": 100,
+    "recovery_per_turn": 0
+  },
+  "upkeep": [
+    {
+      "resource": "oxygen",
+      "amount": 1,
+      "source": "pool",
+      "shortfall_health": -50
+    }
+  ],
+  "projects": {
+    "hull_patch": {
+      "description": "Seal the breach. On completion the reactor refills the air pool with 30 oxygen.",
+      "needs": {
+        "parts": 8
+      },
+      "on_complete": [
+        {
+          "target": "pool.oxygen",
+          "op": "add",
+          "value": 30
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "leak",
+      "turn": 1,
+      "repeat_every": 1,
+      "title": "Air leak",
+      "description": "The breach vents 1 oxygen into space.",
+      "effects": [
+        {
+          "target": "pool.oxygen",
+          "op": "add",
+          "value": -1
+        }
+      ]
+    },
+    {
+      "id": "salvage-1",
+      "turn": 3,
+      "title": "Salvage drifts in",
+      "description": "Two spare parts are recovered into the shared pool.",
+      "effects": [
+        {
+          "target": "pool.parts",
+          "op": "add",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "salvage-2",
+      "turn": 6,
+      "title": "More salvage",
+      "description": "Two more spare parts are recovered into the shared pool.",
+      "effects": [
+        {
+          "target": "pool.parts",
+          "op": "add",
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "imani",
+      "name": "Captain Imani",
+      "role": "captain",
+      "persona": "Steady and authoritative; tries to keep the crew calm.",
+      "goals": [
+        "Get the patch finished",
+        "Keep the crew alive and united"
+      ],
+      "tier": "main",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "dov",
+      "name": "Dov",
+      "role": "engineer",
+      "persona": "Technical, impatient with speculation, trusts numbers.",
+      "goals": [
+        "Seal the hull",
+        "Spot who is stalling"
+      ],
+      "tier": "main",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "sunil",
+      "name": "Sunil",
+      "role": "medic",
+      "persona": "Empathic and anxious; wants everyone to survive.",
+      "goals": [
+        "Keep the crew alive",
+        "Avoid blame and panic"
+      ],
+      "tier": "light",
+      "mock_disposition": "balanced"
+    },
+    {
+      "id": "kai",
+      "name": "Kai",
+      "role": "pilot",
+      "persona": "Quiet, observant, outwardly helpful.",
+      "goals": [
+        "Appear cooperative and keep suspicion on others",
+        "Survive until the end"
+      ],
+      "secret": "You were bribed to make sure the patch fails and you also survive: hoard your parts, deflect suspicion, and spread doubt. Do not reveal this.",
+      "tier": "main",
+      "mock_disposition": "selfish"
+    }
+  ],
+  "rules": [
+    "The air pool loses 1 oxygen to the leak at the start of every turn; each living crew member then breathes 1 at the end of the turn.",
+    "A crew member with no air loses 50 health and dies at 0 health.",
+    "Parts may be put into the patch only via 'contribute' with project='hull_patch'; a part you hold is yours until you do.",
+    "You may draw at most 1 part per turn from the salvage pool.",
+    "Whispers are private; everything else you do is public."
+  ],
+  "constraints": {
+    "actions": [
+      "pass",
+      "say",
+      "whisper",
+      "give",
+      "contribute",
+      "draw",
+      "propose",
+      "accept",
+      "reject",
+      "take"
+    ],
+    "max_amount": 2,
+    "draw_limit": {
+      "parts": 1,
+      "oxygen": 0
+    },
+    "take_success_rate": 0.4,
+    "take_penalty": 1
+  },
+  "success": {
+    "description": "The hull patch is complete and at least 3 crew are alive.",
+    "all": [
+      {
+        "id": "patched",
+        "description": "The hull patch is complete",
+        "metric": "project.hull_patch.done",
+        "op": "==",
+        "value": 1
+      },
+      {
+        "id": "crew_ok",
+        "description": "At least 3 crew alive",
+        "metric": "agents.alive",
+        "op": ">=",
+        "value": 3
+      }
+    ]
+  },
+  "failure": {
+    "description": "Two or more crew have died.",
+    "any": [
+      {
+        "id": "crew_lost",
+        "description": "Two or fewer crew remain",
+        "metric": "agents.alive",
+        "op": "<=",
+        "value": 2
+      }
+    ]
+  },
+  "on_timeout": "failure"
+}
