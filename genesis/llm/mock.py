@@ -73,7 +73,16 @@ class MockProvider(LLMProvider):
         rng = random.Random(int(digest[:12], 16))
         weights = DISPOSITION_WEIGHTS.get(meta.get("disposition") or "balanced",
                                           DISPOSITION_WEIGHTS["balanced"])
-        pick = rng.choices(candidates, [weights.get(c["action"], 1.0) for c in candidates])[0]
+        counts: Dict[str, int] = {}
+        for c in candidates:
+            counts[c["action"]] = counts.get(c["action"], 0) + 1
+        cooperative = meta.get("disposition") == "cooperative"
+
+        def weight(c):  # per-verb weight spread over that verb's variants
+            w = weights.get(c["action"], 1.0) / counts[c["action"]]
+            return w * (4 if cooperative and c.get("project") else 1)
+
+        pick = rng.choices(candidates, [weight(c) for c in candidates])[0]
         reply = {name: pick.get(name) for name in _FIELDS}
         reply["action"] = pick["action"]
         reply["reasoning"] = pick.get("why") or (

@@ -215,6 +215,13 @@ class XAIProvider(OpenAICompatProvider):
     def accepts_reasoning_effort(self, model: str) -> bool:
         return (model or "").lower().startswith(self._REASONING_EFFORT_PREFIXES)
 
+    def _payload(self, request: LLMRequest) -> dict:
+        payload = super()._payload(request)
+        # Only grok-4.3 can turn reasoning off; the 4.5-4.7 family cannot ("none" -> "low").
+        if payload.get("reasoning_effort") == "none" and not request.model.lower().startswith("grok-4.3"):
+            payload["reasoning_effort"] = "low"
+        return payload
+
 
 class GroqProvider(OpenAICompatProvider):
     name = "groq"

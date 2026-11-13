@@ -75,7 +75,7 @@ class ProviderPool:
 
     def get(self, name: Optional[str] = None, **overrides) -> LLMProvider:
         name = name or self.config["provider"]
-        key = f"{name}|{overrides.get('base_url', '')}"
+        key = f"{name}|{overrides.get('base_url') or ''}"
         if key not in self._providers:
             if name not in PROVIDERS:
                 raise ValueError(f"Unknown provider '{name}'. Choose from: {', '.join(PROVIDERS)}")

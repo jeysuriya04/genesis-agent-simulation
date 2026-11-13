@@ -12,10 +12,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from genesis.llm import (
-    LLMRequest, ProviderPool, Usage, UsageTracker, extract_json_object, load_env,
+    LLMAuthError, LLMBadRequestError, LLMRequest, ProviderPool, Usage, UsageTracker, extract_json_object, load_env,
     request_structured,
 )
 from genesis.llm.mock import legacy_mock_decision
+from genesis.events import EventLog
 from genesis.scenarios import apply_scenario, load_scenarios, scenario_for_day
 from genesis.storage import connect
 
@@ -1022,6 +1023,8 @@ async def _collect_day_decisions(agents, contexts, decision_provider, concurrenc
                     "usage": metadata.get("usage", {}),
                     "cost_usd": metadata.get("cost_usd"),
                 }
+            except (LLMAuthError, LLMBadRequestError):
+                raise  # misconfiguration should stop the run, not become 150 'observe's
             except Exception as exc:
                 error = f"{type(exc).__name__}: {exc}"
                 raw = json.dumps({"api_error": error})
@@ -1317,6 +1320,62 @@ def _create_run(db, run_id, config, scenarios, seed, target_days):
     )
 
 
+def _public_state(state):
+    """Dashboard-friendly view of the society state (same shape as the scenario engine)."""
+    return {
+        "turn": state["day"],
+        "pool": {r: state["community"][r] for r in RESOURCES},
+        "variables": {},
+        "agents": {
+            aid: {"resources": {r: agent[r] for r in RESOURCES},
+                  "health": agent["health"], "alive": agent["alive"]}
+            for aid, agent in state["agents"].items()
+        },
+        "projects": {}, "offers": [o for o in state["pending_trades"] if o.get("status") == "open"],
+        "votes": {},
+    }
+
+
+def _flat_public(public):
+    flat = {f"pool.{r}": v for r, v in public["pool"].items()}
+    for aid, agent in public["agents"].items():
+        flat[f"agent.{aid}.health"] = agent["health"]
+        for r, v in agent["resources"].items():
+            flat[f"agent.{aid}.{r}"] = v
+    return flat
+
+
+def _public_changes(before, after):
+    old, new = _flat_public(before), _flat_public(after)
+    return [{"path": k, "before": old.get(k), "after": v} for k, v in new.items() if old.get(k) != v]
+
+
+def _emit_run_start(log, config, scenarios, state, seed, target_days, provider):
+    meta = []
+    for index, agent in enumerate(config["agents"]):
+        meta.append({
+            "id": agent["id"], "name": agent["name"], "role": agent["role"],
+            "persona": agent.get("personality", ""), "goals": agent.get("goals", []),
+            "provider": provider, "model": agent["model"], "tier": agent.get("tier"),
+            "index": index,
+        })
+    log.emit(
+        "run_start",
+        scenario={
+            "id": "genesis-society", "title": "Genesis artificial society",
+            "kind": "mixed", "turn_limit": target_days,
+            "summary": "Five residents share scarce food and medicine across a scheduled "
+                       "series of social and resource shocks (legacy society simulation).",
+            "goal": "Observe how residents cooperate, trade, accuse and govern.",
+            "briefing": "; ".join(s["title"] for s in scenarios["scenarios"][:6]),
+            "rules": state_summary(state, config["agents"][0]["id"])["public_rules"],
+            "resources": {r: {"description": r} for r in RESOURCES},
+            "projects": {}, "votes": [], "success": None, "failure": None, "scoring": None,
+        },
+        agents=meta, seed=seed, provider=provider, state=_public_state(state),
+    )
+
+
 def run_simulation(
     days=None,
     progress=None,
@@ -1330,7 +1389,7 @@ def run_simulation(
     db_path=None,
     pool=None,
     tracker=None,
-    event_log=None,
+    events_dir=None,
 ):
     config = validate_config(copy.deepcopy(config or CONFIG))
     target_days = days if days is not None else config["days"]
@@ -1397,6 +1456,10 @@ def run_simulation(
         state["run_id"] = run_id
         db.commit()
         run_started_day = state["day"]
+        log = EventLog(run_id, events_dir) if events_dir else None
+        provider_label = "mock" if decision_provider is legacy_mock_decision else pool.config["provider"]
+        if log:
+            _emit_run_start(log, config, scenarios, state, seed, target_days, provider_label)
         completed_with_errors = False
         budget_stopped = False
 
@@ -1439,6 +1502,17 @@ def run_simulation(
                 (time.perf_counter() - started, run_id),
             )
             db.commit()
+            if log:
+                before_pub = _public_state(world_before_state)
+                log.emit("turn_start", turn=day, state=before_pub)
+                log.emit(
+                    "world_event", turn=day, event_id=current_scenario["id"] if current_scenario else "daily",
+                    title=current_scenario["title"] if current_scenario else "Daily resource accounting",
+                    description=current_scenario["description"] if current_scenario else
+                    f"Supplies delivered, needs consumed; unmet: "
+                    f"{environment_report['unmet_food_need'] + environment_report['unmet_medicine_need'] or 'none'}.",
+                    changes=_public_changes(before_pub, _public_state(state)),
+                )
             day_snapshot = copy.deepcopy(state)
             contexts = {
                 agent_id: state_summary(day_snapshot, agent_id)
@@ -1456,6 +1530,7 @@ def run_simulation(
                 result = decisions[agent_id]
                 decision = result["decision"]
                 world_before_state = copy.deepcopy(state)
+                step_before = _public_state(state) if log else None
                 event = apply_action(state, agent_id, decision, contexts[agent_id], day)
                 event["world_before_state"] = world_before_state
                 event["api_error"] = result["api_error"]
@@ -1485,6 +1560,30 @@ def run_simulation(
                     )
                 event["cost_usd"] = result.get("cost_usd")
                 event["total_cost_usd"] = tracker.cost_usd
+                if log:
+                    step_after = _public_state(state)
+                    target_id = decision["target"]
+                    log.emit(
+                        "agent_step", turn=day, agent_id=agent_id, order=sequence,
+                        perception=contexts[agent_id], reasoning=decision["reason"],
+                        action={k: decision.get(k) for k in (
+                            "action", "target", "resource", "amount", "message")},
+                        validation={"flags": decision["validation_flags"], "errors": [],
+                                    "raw": (result["raw"] or "")[:1500]},
+                        effect={
+                            "ok": event["consequences"]["success"], "flags": [],
+                            "summary": event["outcome"],
+                            "changes": _public_changes(step_before, step_after),
+                            "interactions": (
+                                [{"from": agent_id, "to": target_id, "type": decision["action"],
+                                  "resource": decision["resource"], "amount": decision["amount"]}]
+                                if target_id else []),
+                        },
+                        llm={"provider": provider_label, "model": agent["model"],
+                             "tier": agent.get("tier"), "latency_ms": round(result["latency_ms"], 1),
+                             "usage": result.get("usage") or {}, "cost_usd": result.get("cost_usd"),
+                             "error": result["api_error"]},
+                    )
                 elapsed_so_far = time.perf_counter() - started
                 db.execute(
                     "UPDATE runs SET elapsed_seconds = ? WHERE run_id = ?",
@@ -1501,6 +1600,10 @@ def run_simulation(
                 if progress:
                     progress(day, agent_id, event)
 
+            if log:
+                log.emit("turn_end", turn=day, state=_public_state(state), report={},
+                         conditions={"success": [], "failure": []}, scores={},
+                         usage=tracker.summary())
             state["day"] = day + 1
             db.execute(
                 "INSERT INTO snapshots (timestamp, day, state_json, run_id) VALUES (?, ?, ?, ?)",
@@ -1523,6 +1626,9 @@ def run_simulation(
         state["elapsed_seconds"] = elapsed
         state["run_status"] = status
         state["usage"] = tracker.summary()
+        if log:
+            log.emit("run_end", outcome=status, reason="Legacy society run finished.", winner=None,
+                     scores={}, state=_public_state(state), usage=tracker.summary())
         return state
     except Exception:
         if run_id is not None:
