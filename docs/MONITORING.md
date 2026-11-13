@@ -53,7 +53,7 @@ ingests seed documents, builds a GraphRAG knowledge graph (Zep Cloud), generates
 personas and runs an OASIS-based social simulation, then writes a report. Integrating it would
 mean replacing Genesis's simulator rather than observing it, and in practice:
 
-* it needs a Vue/Node frontend plus a Python 3.11-3.12 backend, a Zep Cloud account/key and an
+* it needs a Node frontend plus a Python 3.11-3.12 backend, a Zep Cloud account/key and an
   LLM key (the Genesis monitor needs only Python);
 * it is licensed **AGPL-3.0**, which would impose copyleft obligations on this project if its code
   were embedded or served;
