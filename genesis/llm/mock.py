@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import random
+import time
 from typing import Callable, Dict, List, Optional
 
 from genesis.llm.base import (
@@ -37,15 +38,19 @@ class MockProvider(LLMProvider):
     supports_json_schema = True
 
     def __init__(self, seed: int = 0, script: Optional[List[object]] = None,
-                 policy: Optional[Callable[[LLMRequest], object]] = None, fail_first: int = 0):
+                 policy: Optional[Callable[[LLMRequest], object]] = None, fail_first: int = 0,
+                 delay: float = 0.0):
         self.seed = seed
         self.script = list(script or [])
         self.policy = policy
         self.fail_first = fail_first
+        self.delay = delay  # seconds of fake latency per call (to watch a run live)
         self.requests: List[LLMRequest] = []
 
     def complete(self, request: LLMRequest) -> LLMResponse:
         self.requests.append(request)
+        if self.delay:
+            time.sleep(self.delay)
         if self.fail_first > 0:
             self.fail_first -= 1
             raise LLMRateLimitError("mock rate limit", status=429)

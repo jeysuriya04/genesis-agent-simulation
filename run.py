@@ -32,6 +32,8 @@ parser.add_argument("--concurrency", type=int, default=None, help="Concurrent LL
 parser.add_argument("--provider", choices=["xai", "groq", "openai", "mock"],
                     help="LLM provider (default from config.json: xai).")
 parser.add_argument("--mock", action="store_true", help="Shortcut for --provider mock (no API key).")
+parser.add_argument("--mock-delay", type=float, default=0.0,
+                    help="Seconds of fake latency per mock call, to watch a run live in the monitor.")
 parser.add_argument("--model-main", help="Override the main-tier model id (default grok-4.7).")
 parser.add_argument("--model-light", help="Override the light-tier model id.")
 parser.add_argument("--max-cost", type=float, help="Stop the run once estimated spend reaches this USD.")
@@ -68,7 +70,7 @@ def run_scenario():
     llm = llm_overrides(base)
     seed = args.seed if args.seed is not None else base.get("seed", 7)
     spec = get_scenario(args.scenario)
-    pool = ProviderPool(llm, pricing=base.get("pricing"), mock_seed=seed)
+    pool = ProviderPool(llm, pricing=base.get("pricing"), mock_seed=seed, mock_delay=args.mock_delay)
     tracker = UsageTracker(max_cost_usd=llm.get("max_cost_usd"))
 
     def progress(step):

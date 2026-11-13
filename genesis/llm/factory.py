@@ -67,11 +67,13 @@ class ProviderPool:
     """Lazily creates one provider per (name, base_url) and resolves agent settings."""
 
     def __init__(self, llm_config: Optional[dict] = None, *, pricing: Optional[dict] = None,
-                 providers: Optional[Dict[str, LLMProvider]] = None, mock_seed: int = 0):
+                 providers: Optional[Dict[str, LLMProvider]] = None, mock_seed: int = 0,
+                 mock_delay: float = 0.0):
         self.config = merge_llm_config(llm_config)
         self.pricing = pricing
         self._providers: Dict[str, LLMProvider] = dict(providers or {})
         self.mock_seed = mock_seed
+        self.mock_delay = mock_delay
 
     def get(self, name: Optional[str] = None, **overrides) -> LLMProvider:
         name = name or self.config["provider"]
@@ -80,7 +82,7 @@ class ProviderPool:
             if name not in PROVIDERS:
                 raise ValueError(f"Unknown provider '{name}'. Choose from: {', '.join(PROVIDERS)}")
             if name == "mock":
-                self._providers[key] = MockProvider(seed=self.mock_seed)
+                self._providers[key] = MockProvider(seed=self.mock_seed, delay=self.mock_delay)
             else:
                 options = {"max_retries": self.config.get("max_retries", 4), "pricing": self.pricing}
                 options.update({k: v for k, v in overrides.items() if v is not None})

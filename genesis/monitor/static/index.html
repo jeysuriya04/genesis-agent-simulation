@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Genesis Monitor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{--bg:#0d1117;--panel:#161b22;--panel2:#1c232d;--line:#2a3340;--text:#e6edf3;--mute:#8b98a8;--accent:#58a6ff;
+--good:#3fb950;--bad:#f85149;--warn:#d29922;--purple:#a371f7;--c0:#55d6be;--c1:#f7b267;--c2:#f4845f;--c3:#9b8afb;--c4:#61a0ff;--c5:#ff7eb6;--c6:#c3e88d;--c7:#ffd166}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.45 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+header{display:flex;align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.brand{font-weight:700;letter-spacing:.3px}.brand b{color:var(--accent)}
+select,button,input[type=range]{font:inherit;color:var(--text)}
+select{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 8px;max-width:340px}
+button{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
+button:hover{border-color:var(--accent)}button.on{background:#1f3a5f;border-color:var(--accent)}
+.pill{padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line)}
+.pill.running{color:var(--accent);border-color:var(--accent)}.pill.success,.pill.decided{color:var(--good);border-color:var(--good)}
+.pill.failure,.pill.error{color:var(--bad);border-color:var(--bad)}.pill.timeout,.pill.aborted_budget,.pill.stopped_budget{color:var(--warn);border-color:var(--warn)}
+.pill.completed,.pill.completed_with_errors{color:var(--good);border-color:var(--good)}
+.live-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--good);margin-right:6px;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.stats{margin-left:auto;display:flex;gap:16px;color:var(--mute)}.stats b{color:var(--text)}
+#replay{display:flex;align-items:center;gap:8px;padding:8px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+#replay input[type=range]{flex:1;accent-color:var(--accent)}
+#timeline{display:flex;gap:4px;padding:8px 16px;overflow-x:auto;border-bottom:1px solid var(--line);background:var(--bg)}
+.tl{min-width:74px;flex:1;border:1px solid var(--line);border-radius:6px;padding:4px 6px;cursor:pointer;background:var(--panel)}
+.tl:hover{border-color:var(--accent)}.tl.sel{border-color:var(--accent);background:#14253d}.tl.future{opacity:.35}
+.tl .t{font-weight:700;font-size:11px;color:var(--mute);display:flex;justify-content:space-between}
+.tl .dots{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}.dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+.tl .ev{font-size:10px;color:var(--warn);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tl .flag{font-size:10px;font-weight:700}
+main{display:grid;grid-template-columns:290px minmax(0,1fr) 300px;gap:12px;padding:12px 16px;height:calc(100vh - 150px)}
+.col{overflow-y:auto;min-height:0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin-bottom:10px}
+.card h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mute)}
+.mute{color:var(--mute)}.small{font-size:11px}
+.cond{display:flex;gap:6px;align-items:flex-start;margin:3px 0}.cond i{font-style:normal;font-weight:700}
+.met{color:var(--good)}.unmet{color:var(--mute)}.failcond.met{color:var(--bad)}
+.agent{display:flex;gap:8px;align-items:center;padding:6px;border-radius:6px;cursor:pointer;border:1px solid transparent}
+.agent:hover{background:var(--panel2)}.agent.sel{border-color:var(--accent);background:#14253d}.agent.dead{opacity:.45;text-decoration:line-through}
+.swatch{width:12px;height:12px;border-radius:3px;flex:none}
+.tabs{display:flex;gap:4px;margin-bottom:10px;position:sticky;top:0;background:var(--bg);padding-bottom:6px;z-index:2}
+.tab{padding:6px 14px;border-radius:6px;cursor:pointer;border:1px solid var(--line);background:var(--panel)}.tab.sel{background:#1f3a5f;border-color:var(--accent)}
+.step{border-left:4px solid var(--c0)}
+.step header{padding:0;border:0;background:none;display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.step .name{font-weight:700;font-size:14px}.badge{padding:1px 7px;border-radius:5px;border:1px solid var(--line);font-size:11px;color:var(--mute)}
+.sec{margin:6px 0}.sec .lab{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:var(--mute);margin-bottom:2px}
+.quote{font-style:italic;color:#c9d6e5;border-left:2px solid var(--line);padding-left:8px}
+.act{display:inline-block;padding:2px 9px;border-radius:5px;font-weight:700;font-size:12px;background:#243246;border:1px solid #34445c}
+.act.give,.act.contribute,.act.accept{background:#16331f;border-color:#2c6a3d}.act.take,.act.reject{background:#3a1b1b;border-color:#7a2f2f}
+.act.whisper{background:#2b2146;border-color:#5b44a0}.act.vote,.act.propose{background:#1a2c4a;border-color:#2f5a9a}.act.draw{background:#3a2f12;border-color:#8a6d1c}
+.chg{display:inline-block;margin:2px 4px 0 0;padding:1px 6px;border-radius:4px;background:#0f1722;border:1px solid var(--line);font-family:ui-monospace,Menlo,monospace;font-size:11px}
+.chg.up{color:var(--good)}.chg.down{color:var(--bad)}
+.warnflag{color:var(--warn);font-size:11px;font-weight:600}
+ul.p{margin:2px 0 0;padding-left:16px}ul.p li{margin:1px 0}
+details summary{cursor:pointer;color:var(--mute);font-size:11px}
+pre{white-space:pre-wrap;word-break:break-word;background:#0b0f14;border:1px solid var(--line);padding:8px;border-radius:6px;font-size:11px;max-height:260px;overflow:auto}
+table{width:100%;border-collapse:collapse}td,th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--mute);font-size:11px;font-weight:600}
+.bar{height:7px;background:#0b0f14;border-radius:4px;overflow:hidden;border:1px solid var(--line)}.bar>div{height:100%;background:var(--accent)}
+.kv{display:flex;justify-content:space-between;gap:8px}.kv b{font-variant-numeric:tabular-nums}
+.feed div{padding:3px 0;border-bottom:1px dashed var(--line)}.feed .w{color:var(--warn)}
+#empty{padding:60px;text-align:center;color:var(--mute)}
+svg text{fill:var(--text);font:11px sans-serif}.legend span{margin-right:12px;white-space:nowrap}.legend i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:4px}
+.chartbox{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:10px}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">GENESIS <b>MONITOR</b></div>
+  <select id="runSel" title="Run"></select>
+  <span id="status" class="pill">-</span>
+  <span id="kindInfo" class="mute"></span>
+  <div class="stats">
+    <span>Turn <b id="sTurn">-</b></span><span>LLM calls <b id="sCalls">-</b></span>
+    <span>Tokens <b id="sTok">-</b></span><span>Cost <b id="sCost">-</b></span>
+  </div>
+</header>
+<div id="replay">
+  <button id="bFirst" title="First turn">|&lt;</button><button id="bPrev" title="Previous">&lt;</button>
+  <button id="bPlay" title="Play / pause replay">Play</button>
+  <button id="bNext" title="Next">&gt;</button><button id="bLast" title="Latest turn">&gt;|</button>
+  <input id="slider" type="range" min="1" max="1" value="1">
+  <span id="turnLabel" class="mute">Turn -</span>
+  <select id="speed" title="Replay speed"><option value="2200">0.5x</option><option value="1200" selected>1x</option><option value="500">2x</option><option value="200">5x</option></select>
+  <button id="bLive" class="on" title="Follow the newest turn as events arrive">Follow live</button>
+</div>
+<div id="timeline"></div>
+<main id="main">
+  <div class="col" id="left"></div>
+  <div class="col" id="center"></div>
+  <div class="col" id="right"></div>
+</main>
+<script>
+const PALETTE=['--c0','--c1','--c2','--c3','--c4','--c5','--c6','--c7'].map(v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim());
+const EDGE_COLORS={give:'#3fb950',whisper:'#a371f7',propose:'#58a6ff',accept:'#58a6ff',reject:'#8b98a8',take:'#f85149',take_failed:'#f0883e'};
+const S={pinned:!!new URLSearchParams(location.search).get('run'),runs:[],runId:null,events:[],lastSeq:0,finished:false,turn:1,tab:'step',agent:null,live:true,playing:false,timer:null,poll:null,graphMode:'cum',chartRes:null};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fmt=n=>n==null?'-':Number(n).toLocaleString();
+
+// ---------- derived data ----------
+function model(){
+  const ev=S.events,start=ev.find(e=>e.type==='run_start'),end=ev.find(e=>e.type==='run_end');
+  const turns={};let maxTurn=0;
+  for(const e of ev){
+    if(e.turn==null)continue;maxTurn=Math.max(maxTurn,e.turn);
+    const t=turns[e.turn]??={turn:e.turn,steps:[],events:[],start:null,end:null};
+    if(e.type==='agent_step')t.steps.push(e);else if(e.type==='world_event')t.events.push(e);
+    else if(e.type==='turn_start')t.start=e;else if(e.type==='turn_end')t.end=e;
+  }
+  const agents=start?start.agents:[];
+  return {start,end,turns,maxTurn,agents,limit:start?start.scenario.turn_limit:0,
+    byId:Object.fromEntries(agents.map(a=>[a.id,a]))};
+}
+const color=(a)=>PALETTE[(a?.index??0)%PALETTE.length];
+
+// ---------- fetch ----------
+async function loadRuns(){
+  const r=await (await fetch('/api/runs')).json();S.runs=r.runs;
+  const sel=$('runSel');const cur=S.runId;
+  sel.innerHTML=S.runs.map(x=>`<option value="${esc(x.run_id)}">${esc(x.title)} - ${esc(x.status)} (${esc(x.provider||'')}) ${esc(x.run_id)}</option>`).join('');
+  if(!S.runs.length){$('center').innerHTML='<div id="empty">No runs yet. Start one with <code>python run.py --scenario drought-village --mock</code>.</div>';return;}
+  const want=cur&&S.runs.find(x=>x.run_id===cur)?cur:(new URLSearchParams(location.search).get('run')||S.runs[0].run_id);
+  sel.value=S.runs.find(x=>x.run_id===want)?want:S.runs[0].run_id;
+  const newest=S.runs[0];
+  if(!S.pinned&&S.runId&&newest.run_id!==S.runId&&newest.status==='running'){sel.value=newest.run_id;selectRun(newest.run_id);return;}
+  sel.value=S.runId||sel.value;
+  if(sel.value!==S.runId)selectRun(sel.value);
+}
+async function selectRun(id){
+  clearInterval(S.poll);stopPlay();
+  S.runId=id;S.events=[];S.lastSeq=0;S.finished=false;S.agent=null;S.turn=1;S.live=true;$('bLive').classList.add('on');
+  await pull();
+  const m=model();S.agent=m.agents[0]?.id||null;
+  const qTurn=new URLSearchParams(location.search).get('turn');
+  if(qTurn){S.turn=Math.min(+qTurn,m.maxTurn||1);S.live=false;$('bLive').classList.remove('on');}
+  else S.turn=Math.max(1,m.maxTurn);
+  render();
+  S.poll=setInterval(async()=>{if(!S.finished){await pull();followLive();render();}},1000);
+}
+async function pull(){
+  const r=await (await fetch(`/api/runs/${encodeURIComponent(S.runId)}/events?after=${S.lastSeq}`)).json();
+  if(r.events&&r.events.length){S.events.push(...r.events);S.lastSeq=r.events[r.events.length-1].seq;}
+  S.finished=!!r.finished;
+}
+function followLive(){if(S.live){const m=model();S.turn=Math.max(1,m.maxTurn);}}
+
+// ---------- render ----------
+function render(){
+  const m=model();if(!m.start)return;
+  S.turn=Math.min(Math.max(1,S.turn),Math.max(1,m.maxTurn));
+  const lastTurn=m.maxTurn;
+  const usage=(m.end?.usage)||(Object.values(m.turns).filter(t=>t.end).map(t=>t.end.usage).pop())||{};
+  const status=m.end?m.end.outcome:'running';
+  $('status').className='pill '+status;$('status').innerHTML=(m.end?'':'<span class="live-dot"></span>')+status.toUpperCase();
+  $('kindInfo').textContent=`${m.start.scenario.title} - ${m.start.scenario.kind} - ${m.start.provider}`;
+  $('sTurn').textContent=`${lastTurn}/${m.limit}`;$('sCalls').textContent=fmt(usage.calls);
+  $('sTok').textContent=fmt(usage.total_tokens);$('sCost').textContent=usage.cost_usd==null?'-':'$'+Number(usage.cost_usd).toFixed(4);
+  const sl=$('slider');sl.max=Math.max(1,lastTurn);sl.value=S.turn;
+  $('turnLabel').textContent=`Turn ${S.turn} / ${m.limit}`;
+  renderTimeline(m);renderLeft(m);renderCenter(m);renderRight(m);
+}
+function renderTimeline(m){
+  let h='';
+  for(let t=1;t<=m.limit;t++){
+    const T=m.turns[t];const future=!T;
+    const dots=(T?.steps||[]).map(s=>`<span class="dot" style="background:${color(m.byId[s.agent_id])}" title="${esc(m.byId[s.agent_id]?.name)}: ${esc(s.action.action)}"></span>`).join('');
+    const ev=(T?.events||[]).map(e=>e.title).join(' + ');
+    let flag='';if(m.end&&t===m.end.turns_played)flag=`<span class="flag pill ${m.end.outcome}">${esc(m.end.outcome)}</span>`;
+    else if(m.end&&m.end.turns_played==null&&t===m.maxTurn)flag='';
+    h+=`<div class="tl ${t===S.turn?'sel':''} ${future?'future':''}" data-t="${t}"><div class="t"><span>T${t}</span>${flag}</div><div class="dots">${dots}</div><div class="ev" title="${esc(ev)}">${esc(ev)||'&nbsp;'}</div></div>`;
+  }
+  $('timeline').innerHTML=h;
+  $('timeline').querySelectorAll('.tl').forEach(el=>el.onclick=()=>{if(m.turns[+el.dataset.t]){S.live=false;$('bLive').classList.remove('on');S.turn=+el.dataset.t;render();}});
+}
+function stateAt(m,t){const T=m.turns[t];return (T?.end?.state)||(T?.start?.state)||m.start.state;}
+function condStatus(m){
+  const T=m.turns[S.turn]||m.turns[m.maxTurn];const c=T?.end?.conditions||{success:[],failure:[]};return c;
+}
+function renderLeft(m){
+  const sc=m.start.scenario;const cond=condStatus(m);
+  const mk=(list,cls)=>list.map(d=>`<div class="cond ${cls} ${d.met?'met':'unmet'}"><i>${d.met?'&#10003;':'&#9675;'}</i><span>${esc(d.description)} <span class="mute small">(${esc(d.metric)} ${esc(d.op)} ${esc(d.target)}; now ${esc(d.value)})</span></span></div>`).join('');
+  const plain=(g,cls)=>g?`<div class="small mute" style="margin-top:6px">${esc(g.description)}</div>`:'';
+  const state=stateAt(m,S.turn);
+  let h=`<div class="card"><h3>Scenario</h3><div style="font-weight:700;font-size:14px">${esc(sc.title)}</div>
+    <div class="small mute" style="margin:2px 0 6px">${esc(sc.kind)} - ${m.limit} turns</div>
+    <div><b>Goal.</b> ${esc(sc.goal)}</div></div>`;
+  h+=`<div class="card"><h3>Success conditions</h3>${plain(sc.success)}${mk(cond.success,'')||'<div class="small mute">'+(sc.scoring?'Highest score wins: '+esc(JSON.stringify(sc.scoring.weights)):'No explicit success list.')+'</div>'}
+      <h3 style="margin-top:10px">Failure conditions</h3>${plain(sc.failure)}${mk(cond.failure,'failcond')||'<div class="small mute">None.</div>'}</div>`;
+  h+=`<div class="card"><h3>Agents (click to inspect)</h3>`;
+  for(const a of m.agents){
+    const st=state.agents[a.id]||{};
+    h+=`<div class="agent ${a.id===S.agent?'sel':''} ${st.alive===false?'dead':''}" data-a="${esc(a.id)}"><span class="swatch" style="background:${color(a)}"></span>
+      <div><div><b>${esc(a.name)}</b> <span class="mute">${esc(a.role)}</span></div><div class="small mute">${esc(a.model)} - ${esc(a.tier||'')}${st.alive===false?' - DEAD':''}</div></div></div>`;
+  }
+  h+='</div>';
+  if(m.end){h+=`<div class="card"><h3>Result</h3><div class="pill ${m.end.outcome}" style="display:inline-block">${esc(m.end.outcome.toUpperCase())}</div>
+    <div style="margin-top:6px">${esc(m.end.reason)}</div>${m.end.winner?`<div><b>Winner:</b> ${esc(m.byId[m.end.winner]?.name||m.end.winner)}</div>`:''}
+    ${Object.keys(m.end.scores||{}).length?'<div class="small mute" style="margin-top:4px">Scores: '+Object.entries(m.end.scores).map(([k,v])=>esc(m.byId[k]?.name||k)+' '+v).join(', ')+'</div>':''}</div>`;}
+  $('left').innerHTML=h;
+  $('left').querySelectorAll('.agent').forEach(el=>el.onclick=()=>{S.agent=el.dataset.a;if(S.tab==='step')S.tab='agent';render();});
+}
+
+function chips(changes){
+  if(!changes||!changes.length)return '<span class="mute small">no state change</span>';
+  return changes.map(c=>{const up=(c.after??0)>(c.before??0);return `<span class="chg ${up?'up':'down'}">${esc(c.path)} ${esc(c.before)}&rarr;${esc(c.after)}</span>`}).join('');
+}
+function actionLabel(a){
+  const bits=[a.target&&('to '+a.target),a.resource&&(a.amount?`${a.amount} ${a.resource}`:a.resource),a.request_resource&&(`for ${a.request_amount||''} ${a.request_resource}`),a.project&&('project '+a.project),a.vote_id&&(`${a.vote_id} = ${a.option}`),a.offer_id].filter(Boolean);
+  return `<span class="act ${esc(a.action)}">${esc(a.action)}</span> <span class="small">${esc(bits.join(' '))}</span>`;
+}
+function perceptionHtml(p){
+  const you=p.you||p.your_id&&{id:p.your_id}||{};
+  const li=[];
+  if(p.you){
+    li.push(`Own resources: <b>${esc(Object.entries(p.you.resources||{}).map(([k,v])=>k+' '+v).join(', '))}</b>, health ${esc(p.you.health)}`);
+    if(p.turns_remaining_after_this!=null)li.push(`Turn ${p.turn}/${p.turn_limit} (${p.turns_remaining_after_this} left after this)`);
+    if(p.world?.pool)li.push(`Shared pool: ${esc(Object.entries(p.world.pool).map(([k,v])=>k+' '+v).join(', '))}`);
+    const vars=Object.entries(p.world?.variables||{});if(vars.length)li.push('World variables: '+esc(vars.map(([k,v])=>k+'='+v).join(', ')));
+    const ev=(p.world?.events_this_turn||[]).map(e=>e.title);if(ev.length)li.push('Event this turn: <b>'+esc(ev.join(', '))+'</b>');
+    if((p.offers_to_you||[]).length)li.push(`Trade offers to you: ${esc(p.offers_to_you.map(o=>`${o.id} (${o.from}: ${o.give_amount} ${o.give_resource} for ${o.want_amount} ${o.want_resource})`).join('; '))}`);
+    if((p.open_votes||[]).length)li.push('Open votes: '+esc(p.open_votes.map(v=>v.question+' ['+Object.keys(v.options).join('/')+']').join('; ')));
+    if(p.you.secret_briefing)li.push('<span class="warnflag">Secret briefing:</span> '+esc(p.you.secret_briefing));
+    const pm=(p.private_messages_to_you||[]).slice(-2);pm.forEach(x=>li.push(`Private msg from ${esc(x.from_name)}: &ldquo;${esc(x.message)}&rdquo;`));
+    const lg=(p.recent_public_log||[]).slice(-2);lg.forEach(x=>li.push(`<span class="mute">Recent: ${esc(x.text)}</span>`));
+  }else{
+    li.push(`Day ${esc(p.day)}; resources ${esc(JSON.stringify(p.your_resources||{}))}, health ${esc(p.your_health)}`);
+    li.push(`Community: ${esc(JSON.stringify(p.community_resources||{}))}`);
+    if(p.active_scenario)li.push('Event: <b>'+esc(p.active_scenario.title)+'</b>');
+    (p.recent_events||[]).slice(-2).forEach(e=>li.push(`<span class="mute">Recent: ${esc(e.agent_name)} ${esc(e.action)}</span>`));
+  }
+  return `<ul class="p">${li.map(x=>`<li>${x}</li>`).join('')}</ul><details><summary>full perception JSON</summary><pre>${esc(JSON.stringify(p,null,1))}</pre></details>`;
+}
+function stepCard(m,s,showTurn){
+  const a=m.byId[s.agent_id]||{name:s.agent_id,index:0};const l=s.llm||{};const f=s.validation?.flags||[];
+  const cost=l.cost_usd==null?'':` - $${Number(l.cost_usd).toFixed(4)}`;
+  const tok=l.usage?.total_tokens?` - ${fmt(l.usage.total_tokens)} tok`:'';
+  return `<div class="card step" style="border-left-color:${color(a)}">
+    <header><span class="name" style="color:${color(a)}">${esc(a.name)}</span><span class="mute">${esc(a.role||'')}</span>
+      ${showTurn?`<span class="badge">turn ${s.turn}</span>`:''}<span class="badge">#${s.order+1} to act</span>
+      <span class="badge">${esc(l.model||'')}</span><span class="badge">${l.latency_ms!=null?Math.round(l.latency_ms)+' ms':''}${tok}${cost}${l.retries?` - ${l.retries} retr`:''}${l.repairs?` - ${l.repairs} repair`:''}</span>
+      ${f.map(x=>`<span class="warnflag">&#9888; ${esc(x)}</span>`).join(' ')}</header>
+    <div class="sec"><div class="lab">1 &middot; Perception (what it observed)</div>${perceptionHtml(s.perception)}</div>
+    <div class="sec"><div class="lab">2 &middot; Reasoning (model self-report)</div><div class="quote">${esc(s.reasoning)||'<span class="mute">(none)</span>'}</div></div>
+    <div class="sec"><div class="lab">3 &middot; Chosen action</div>${actionLabel(s.action)}${s.action.message?`<div class="small" style="margin-top:3px">&ldquo;${esc(s.action.message)}&rdquo;</div>`:''}
+      ${s.validation?.errors?.length?`<div class="warnflag">validation: ${esc(s.validation.errors.join('; '))}</div>`:''}</div>
+    <div class="sec"><div class="lab">4 &middot; Effect on the world</div><div>${esc(s.effect.summary)}</div><div>${chips(s.effect.changes)}</div></div>
+  </div>`;
+}
+function renderCenter(m){
+  const tabs=[['step','Turn steps'],['agent','Agent view'],['graph','Interaction graph'],['world','World charts'],['log','Event log']];
+  let h='<div class="tabs">'+tabs.map(([k,n])=>`<div class="tab ${S.tab===k?'sel':''}" data-tab="${k}">${n}</div>`).join('')+'</div>';
+  if(S.tab==='step'){
+    const T=m.turns[S.turn];
+    if(T){
+      for(const e of T.events)h+=`<div class="card" style="border-left:4px solid var(--warn)"><h3>World event &middot; ${esc(e.title)}</h3><div>${esc(e.description)}</div><div>${chips(e.changes)}</div></div>`;
+      h+=T.steps.map(s=>stepCard(m,s,false)).join('')||'<div class="card mute">Agents are deciding...</div>';
+    }
+  }else if(S.tab==='agent')h+=agentView(m);
+  else if(S.tab==='graph')h+=graphView(m);
+  else if(S.tab==='world')h+=worldView(m);
+  else h+=logView(m);
+  const keep=$('center').scrollTop;$('center').innerHTML=h;$('center').scrollTop=keep;
+  $('center').querySelectorAll('.tab').forEach(el=>el.onclick=()=>{S.tab=el.dataset.tab;render();});
+  const gm=$('center').querySelector('#graphMode');if(gm)gm.onchange=()=>{S.graphMode=gm.value;render();};
+  const cr=$('center').querySelector('#chartRes');if(cr)cr.onchange=()=>{S.chartRes=cr.value;render();};
+  $('center').querySelectorAll('.gnode').forEach(el=>el.onclick=()=>{S.agent=el.dataset.a;S.tab='agent';render();});
+}
+function agentView(m){
+  const a=m.byId[S.agent];if(!a)return '<div class="card mute">Pick an agent on the left.</div>';
+  const steps=Object.values(m.turns).flatMap(t=>t.steps).filter(s=>s.agent_id===a.id&&s.turn<=S.turn).sort((x,y)=>x.turn-y.turn);
+  const st=stateAt(m,S.turn).agents[a.id]||{resources:{}};
+  let h=`<div class="card" style="border-left:4px solid ${color(a)}"><h3>${esc(a.name)} - ${esc(a.role)}</h3>
+    <div>${esc(a.persona)}</div><div class="small mute" style="margin-top:4px"><b>Goals:</b> ${esc((a.goals||[]).join(' | '))}</div>
+    <div class="small mute"><b>Model:</b> ${esc(a.provider)} / ${esc(a.model)} (${esc(a.tier||'')})</div>
+    <div style="margin-top:6px">Now: ${Object.entries(st.resources||{}).map(([k,v])=>`<span class="chg">${esc(k)} ${v}</span>`).join('')}<span class="chg">health ${esc(st.health)}</span>${st.alive===false?'<span class="chg down">dead</span>':''}</div></div>`;
+  const keys=Object.keys(st.resources||{});
+  const xs=Array.from({length:S.turn+1},(_,i)=>i);
+  const series=keys.map((k,i)=>({name:k,color:PALETTE[i%8],pts:xs.map(t=>stateAt(m,t).agents[a.id]?.resources?.[k]??0)}));
+  series.push({name:'health/10',color:'#f85149',pts:xs.map(t=>(stateAt(m,t).agents[a.id]?.health??0)/10)});
+  h+=`<div class="card"><h3>Resources over time</h3>${lineChart(series,xs,150)}</div>`;
+  h+='<div class="card"><h3>Action history</h3><table><tr><th>Turn</th><th>Action</th><th>Effect</th><th>Reasoning (self-report)</th></tr>'+
+     steps.map(s=>`<tr><td>${s.turn}</td><td>${actionLabel(s.action)}</td><td>${esc(s.effect.summary)}</td><td class="mute">${esc(s.reasoning)}</td></tr>`).join('')+'</table></div>';
+  const cur=steps.filter(s=>s.turn===S.turn)[0];if(cur)h+=stepCard(m,cur,true);
+  return h;
+}
+function graphView(m){
+  const W=620,H=420,cx=W/2,cy=H/2,R=150;
+  const pos={};m.agents.forEach((a,i)=>{const ang=-Math.PI/2+2*Math.PI*i/m.agents.length;pos[a.id]={x:cx+R*Math.cos(ang),y:cy+R*Math.sin(ang)};});
+  const edges={};
+  for(const t of Object.values(m.turns))for(const s of t.steps){
+    if(S.graphMode==='cum'?s.turn>S.turn:s.turn!==S.turn)continue;
+    for(const i of (s.effect.interactions||[])){if(!pos[i.from]||!pos[i.to])continue;const k=i.from+'>'+i.to+'>'+i.type;(edges[k]??={from:i.from,to:i.to,type:i.type,n:0,amount:0}).n++;edges[k].amount+=i.amount||0;}
+  }
+  let svg=`<svg viewBox="0 0 ${W} ${H}" width="100%" style="max-height:480px;background:#0b0f14;border:1px solid var(--line);border-radius:8px"><defs>`+
+    Object.entries(EDGE_COLORS).map(([k,c])=>`<marker id="ar-${k}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0L10,5L0,10z" fill="${c}"/></marker>`).join('')+'</defs>';
+  const list=Object.values(edges);const pairSeen={};
+  for(const e of list){
+    const a=pos[e.from],b=pos[e.to];const pk=[e.from,e.to].sort().join('|');const idx=(pairSeen[pk]=(pairSeen[pk]||0)+1)-1;
+    const dx=b.x-a.x,dy=b.y-a.y,len=Math.hypot(dx,dy)||1,nx=-dy/len,ny=dx/len;
+    const bend=(e.from<e.to?1:-1)*(18+idx*14);
+    const mx=(a.x+b.x)/2+nx*bend,my=(a.y+b.y)/2+ny*bend;
+    const sx=a.x+dx/len*22,sy=a.y+dy/len*22,ex=b.x-dx/len*26,ey=b.y-dy/len*26;
+    const c=EDGE_COLORS[e.type]||'#8b98a8';
+    svg+=`<path d="M${sx},${sy} Q${mx},${my} ${ex},${ey}" fill="none" stroke="${c}" stroke-width="${Math.min(7,1.5+e.n*1.2)}" opacity=".8" ${e.type==='take_failed'?'stroke-dasharray="5 4"':''} marker-end="url(#ar-${e.type in EDGE_COLORS?e.type:'reject'})"><title>${esc(e.type)}: ${e.n}x${e.amount?', '+e.amount+' units':''}</title></path>`+
+         `<text x="${mx}" y="${my}" text-anchor="middle" style="font-size:10px;fill:${c}">${e.n>1?e.n+'x':''}</text>`;
+  }
+  for(const a of m.agents){
+    const p=pos[a.id];const dead=stateAt(m,S.turn).agents[a.id]?.alive===false;
+    svg+=`<g class="gnode" data-a="${esc(a.id)}" style="cursor:pointer" opacity="${dead?.4:1}"><circle cx="${p.x}" cy="${p.y}" r="22" fill="${color(a)}" stroke="${a.id===S.agent?'#fff':'#0b0f14'}" stroke-width="3"/>
+      <text x="${p.x}" y="${p.y+4}" text-anchor="middle" style="fill:#0b0f14;font-weight:700">${esc(a.name.split(' ').pop().slice(0,6))}</text>
+      <text x="${p.x}" y="${p.y+38}" text-anchor="middle" style="font-size:10px;fill:#8b98a8">${esc(a.role)}</text></g>`;
+  }
+  svg+='</svg>';
+  const legend='<div class="legend small" style="margin-top:6px">'+Object.entries(EDGE_COLORS).map(([k,c])=>`<span><i style="background:${c}"></i>${k.replace('_',' ')}</span>`).join('')+'</div>';
+  const tot=list.reduce((n,e)=>n+e.n,0);
+  return `<div class="card"><h3>Agent interaction graph <select id="graphMode" style="float:right"><option value="cum" ${S.graphMode==='cum'?'selected':''}>cumulative to turn ${S.turn}</option><option value="turn" ${S.graphMode==='turn'?'selected':''}>this turn only</option></select></h3>${svg}${legend}
+    <div class="small mute" style="margin-top:4px">${tot} directed interactions shown (gives, whispers, offers, accepts, rejections, thefts). Public statements and pool actions have no target and are not edges. Click an agent to open it.</div></div>`;
+}
+function lineChart(series,xs,h){
+  const W=420,pad=28;const all=series.flatMap(s=>s.pts);const max=Math.max(1,...all),min=Math.min(0,...all);
+  const X=i=>pad+(xs.length<2?0:i*(W-pad-8)/(xs.length-1)),Y=v=>h-18-(v-min)*(h-30)/((max-min)||1);
+  let svg=`<svg viewBox="0 0 ${W} ${h}" width="100%"><line x1="${pad}" y1="${Y(0)}" x2="${W-6}" y2="${Y(0)}" stroke="#2a3340"/>`;
+  [min,max].forEach(v=>svg+=`<text x="2" y="${Y(v)+4}" style="font-size:10px;fill:#8b98a8">${Math.round(v*10)/10}</text>`);
+  xs.forEach((t,i)=>{if(xs.length<=14||i%2===0)svg+=`<text x="${X(i)}" y="${h-4}" text-anchor="middle" style="font-size:9px;fill:#8b98a8">${t}</text>`;});
+  for(const s of series){svg+=`<polyline fill="none" stroke="${s.color}" stroke-width="2" points="${s.pts.map((v,i)=>X(i)+','+Y(v)).join(' ')}"/>`;
+    svg+=s.pts.map((v,i)=>`<circle cx="${X(i)}" cy="${Y(v)}" r="2.5" fill="${s.color}"/>`).join('');}
+  svg+='</svg>';
+  return svg+'<div class="legend small">'+series.map(s=>`<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')+'</div>';
+}
+function worldView(m){
+  const xs=Array.from({length:S.turn+1},(_,i)=>i);const s0=m.start.state;
+  let h='<div class="chartbox">';
+  const poolKeys=Object.keys(s0.pool);
+  if(poolKeys.length)h+=`<div class="card"><h3>Shared pool</h3>${lineChart(poolKeys.map((k,i)=>({name:k,color:PALETTE[i%8],pts:xs.map(t=>stateAt(m,t).pool[k]??0)})),xs,170)}</div>`;
+  const vk=Object.keys(s0.variables||{});
+  if(vk.length)h+=`<div class="card"><h3>World variables</h3>${lineChart(vk.map((k,i)=>({name:k,color:PALETTE[(i+3)%8],pts:xs.map(t=>stateAt(m,t).variables[k]??0)})),xs,170)}</div>`;
+  const resKeys=Object.keys(Object.values(s0.agents)[0]?.resources||{});
+  if(!S.chartRes||![...resKeys,'health'].includes(S.chartRes))S.chartRes=resKeys[0]||'health';
+  const alive=xs.map(t=>Object.values(stateAt(m,t).agents).filter(a=>a.alive).length);
+  h+=`<div class="card"><h3>Each agent's <select id="chartRes">${[...resKeys,'health'].map(k=>`<option ${k===S.chartRes?'selected':''}>${esc(k)}</option>`).join('')}</select></h3>${lineChart(m.agents.map(a=>({name:a.name,color:color(a),pts:xs.map(t=>{const x=stateAt(m,t).agents[a.id];return x?(S.chartRes==='health'?x.health:x.resources[S.chartRes]):0})})),xs,190)}</div>`;
+  h+=`<div class="card"><h3>Agents alive</h3>${lineChart([{name:'alive',color:'#3fb950',pts:alive}],xs,190)}</div></div>`;
+  const costs=Object.values(m.turns).filter(t=>t.end).map(t=>t.end.usage?.cost_usd??0);
+  if(costs.some(c=>c>0))h+=`<div class="card"><h3>Cumulative LLM cost (USD)</h3>${lineChart([{name:'cost',color:'#d29922',pts:[0,...costs.slice(0,S.turn)]}],xs,150)}</div>`;
+  return h;
+}
+function logView(m){
+  const rows=S.events.filter(e=>e.type!=='agent_step'||e.turn<=S.turn).slice(-250).reverse();
+  return '<div class="card"><h3>Raw event stream (newest first)</h3><table><tr><th>seq</th><th>type</th><th>turn</th><th>summary</th></tr>'+rows.map(e=>{
+    let sum='';if(e.type==='agent_step')sum=`${esc(e.agent_id)}: ${esc(e.effect.summary)}`;else if(e.type==='world_event')sum=esc(e.title);else if(e.type==='run_end')sum=esc(e.outcome+' - '+e.reason);
+    return `<tr><td>${e.seq}</td><td>${esc(e.type)}</td><td>${e.turn??''}</td><td>${sum}</td></tr>`}).join('')+'</table></div>';
+}
+function renderRight(m){
+  const st=stateAt(m,S.turn);const sc=m.start.scenario;
+  let h=`<div class="card"><h3>World state - end of turn ${S.turn}</h3>`;
+  const rk=Object.keys(st.pool);
+  if(rk.length){h+='<div class="small mute">Shared pool</div>';rk.forEach(k=>h+=`<div class="kv"><span>${esc(k)}</span><b>${st.pool[k]}</b></div>`);}
+  const vk=Object.entries(st.variables||{});if(vk.length){h+='<div class="small mute" style="margin-top:6px">Variables</div>';vk.forEach(([k,v])=>h+=`<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`);}
+  for(const [pid,p] of Object.entries(st.projects||{})){
+    const info=sc.projects[pid]||{needs:{}};const need=Object.values(info.needs).reduce((a,b)=>a+b,0)||1;const prog=Object.values(p.progress).reduce((a,b)=>a+b,0);
+    h+=`<div style="margin-top:8px"><div class="kv"><span>Project ${esc(pid)}</span><b>${p.done?'DONE':prog+'/'+need}</b></div><div class="bar"><div style="width:${Math.min(100,100*prog/need)}%;background:${p.done?'var(--good)':'var(--accent)'}"></div></div></div>`;}
+  for(const [vid,v] of Object.entries(st.votes||{}))if(Object.keys(v.ballots).length||v.result)h+=`<div class="small" style="margin-top:6px">Vote ${esc(vid)}: ${v.result?'<b>'+esc(v.result)+'</b>':Object.keys(v.ballots).length+' ballots'}</div>`;
+  h+='</div><div class="card"><h3>Agents</h3><table>';
+  for(const a of m.agents){const x=st.agents[a.id];if(!x)continue;
+    h+=`<tr><td><span class="swatch" style="background:${color(a)};display:inline-block"></span> ${esc(a.name)}</td><td>${Object.entries(x.resources).map(([k,v])=>`${esc(k.slice(0,3))} ${v}`).join(' ')}</td><td style="text-align:right">${x.alive?x.health+'hp':'dead'}</td></tr>`;}
+  h+='</table></div>';
+  const feed=[];for(const t of Object.values(m.turns))if(t.turn<=S.turn){t.events.forEach(e=>feed.push({t:t.turn,w:1,x:e.title+': '+e.description}));t.steps.forEach(s=>feed.push({t:t.turn,x:s.effect.summary}));}
+  h+='<div class="card feed"><h3>Public activity (latest)</h3>'+feed.slice(-14).reverse().map(f=>`<div class="${f.w?'w':''}"><span class="mute">T${f.t}</span> ${esc(f.x)}</div>`).join('')+'</div>';
+  $('right').innerHTML=h;
+}
+
+// ---------- controls ----------
+function setTurn(t,keepLive){const m=model();S.turn=Math.min(Math.max(1,t),Math.max(1,m.maxTurn));if(!keepLive){S.live=false;$('bLive').classList.remove('on');}render();}
+function stopPlay(){S.playing=false;clearInterval(S.timer);$('bPlay').textContent='Play';$('bPlay').classList.remove('on');}
+function startPlay(){const m=model();if(S.turn>=m.maxTurn)S.turn=1;S.playing=true;S.live=false;$('bLive').classList.remove('on');$('bPlay').textContent='Pause';$('bPlay').classList.add('on');
+  clearInterval(S.timer);S.timer=setInterval(()=>{const mm=model();if(S.turn>=mm.maxTurn){stopPlay();return;}S.turn++;render();},+$('speed').value);render();}
+$('bFirst').onclick=()=>{stopPlay();setTurn(1)};$('bPrev').onclick=()=>{stopPlay();setTurn(S.turn-1)};
+$('bNext').onclick=()=>{stopPlay();setTurn(S.turn+1)};$('bLast').onclick=()=>{stopPlay();setTurn(1e9)};
+$('bPlay').onclick=()=>S.playing?stopPlay():startPlay();
+$('slider').oninput=e=>{stopPlay();setTurn(+e.target.value)};
+$('speed').onchange=()=>{if(S.playing)startPlay()};
+$('bLive').onclick=()=>{S.live=!S.live;$('bLive').classList.toggle('on',S.live);if(S.live){followLive();render();}};
+$('runSel').onchange=e=>{S.pinned=true;selectRun(e.target.value)};
+document.addEventListener('keydown',e=>{if(e.target.tagName==='SELECT')return;if(e.key==='ArrowRight')setTurn(S.turn+1);if(e.key==='ArrowLeft')setTurn(S.turn-1);if(e.key===' '){e.preventDefault();S.playing?stopPlay():startPlay();}});
+loadRuns();setInterval(loadRuns,5000);
+</script>
+</body>
+</html>
