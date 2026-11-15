@@ -107,7 +107,7 @@ class ScenarioLoaderTests(unittest.TestCase):
                 list_scenarios(tmp)
         with self.assertRaises(KeyError):
             get_scenario("does-not-exist")
-        self.assertEqual(get_scenario("drought-village")["kind"], "cooperation")
+        self.assertEqual(get_scenario("ram-setu")["kind"], "cooperation")
 
 
 if __name__ == "__main__":

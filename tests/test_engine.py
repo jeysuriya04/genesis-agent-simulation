@@ -205,7 +205,7 @@ class EventLogTests(unittest.TestCase):
     def test_event_sequence_ordering_and_replay_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             pool = ProviderPool({"provider": "mock"})
-            result = ScenarioRunner(get_scenario("crater-council"), pool, seed=0, runs_dir=tmp).run()
+            result = ScenarioRunner(get_scenario("ayodhya-sabha"), pool, seed=0, runs_dir=tmp).run()
             events = read_events(result["log_path"])
             self.assertEqual(types(events)[0], "run_start")
             self.assertEqual(types(events)[-1], "run_end")

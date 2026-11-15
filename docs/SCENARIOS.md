@@ -8,10 +8,10 @@ validates every bundled file with `python run.py --list-scenarios`.
 
 | id | kind | agents | turns | tension |
 |---|---|---|---|---|
-| `drought-village` | cooperation | 5 | 10 | A shared well is failing. Villagers must pool *labor* into a deep-well project (needs 10 of the 15 labor available) while a trickle of water is split among them. Hoarding (draw limits are per turn) kills people. Win: well dug and all alive at turn 10. Lose: <= 3 alive. |
-| `salt-road-market` | competition | 4 | 8 | Four traders over a depleting mine. Score = coin + 2 x ore, highest wins. Trades need acceptance, `take` is a gamble (exposed and fined on failure), whispers allow collusion, one trader has a secret grudge. |
-| `crater-council` | decision-making | 5 | 7 | Three binding votes (route, rations, outsiders) with consequences on stability/reserves/morale. Each member holds *private intelligence* that conflicts, so sharing, withholding or bluffing matters. Optional shield project funded by credits. |
-| `station-sabotage` | mixed | 4 | 8 | Air is leaking. The crew must put all 8 spare parts into the hull patch, but one crew member is a secret saboteur. Salvage arrives at turns 3 and 6; trust is the scarce resource. |
+| `ram-setu` | cooperation | 5 | 10 | Vanaras must pool *labor* into Ram Setu (needs 10 of 15 labour) while a trickle of food is split among them. Hoarding kills people. Win: setu built and all alive at turn 10. Lose: <= 3 alive. |
+| `diwali-bazaar` | competition | 4 | 8 | Four Diwali stall-owners. Score = rupees + 2 x sweets, highest wins. Trades need acceptance, `take` is a gamble, whispers allow collusion, one stall has a secret grudge. |
+| `ayodhya-sabha` | decision-making | 5 | 7 | Three binding votes (vanvas path, grain, guest) with consequences on dharma/stores/people's heart. Each member holds *private intelligence*. Optional city-wall yagna funded by offerings. |
+| `lanka-spy` | mixed | 4 | 8 | The setu is leaking. The camp must put all 8 stones into the patch, but one vanara is Ravana's spy. Stones wash ashore at turns 3 and 6; trust is the scarce resource. |
 
 ## Schema
 
@@ -75,5 +75,5 @@ moves for the mock, so they cannot disagree.
 
 1. Copy a bundled file, change ids/resources/agents/conditions.
 2. `python run.py --list-scenarios` to validate (errors list every offending path).
-3. `python run.py --scenario <id> --mock --seed 0` and watch it in `python monitor.py`.
+3. `python run.py --scenario ayodhya-sabha --mock --seed 0` and watch it in `python monitor.py`.
    Tune numbers until the mock produces a mix of outcomes, then try real Grok agents.

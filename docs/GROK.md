@@ -53,4 +53,4 @@ you want a little thinking. `grok-4.6` / `grok-4.5` sit between `grok-4.3` and `
 The test suite exercises the HTTP layer with a fake session and the mock provider. It was
 written against the current xAI docs but **was not run against the live xAI API** (no key in
 the authoring environment). Do a short real run first, e.g.
-`python run.py --scenario crater-council --turns 2 --max-cost 0.25`.
+`python run.py --scenario ayodhya-sabha --turns 2 --max-cost 0.25`.

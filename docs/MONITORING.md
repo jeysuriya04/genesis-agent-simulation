@@ -3,7 +3,7 @@
 ![dashboard](./img/dashboard.png)
 
 ```bash
-python run.py --scenario salt-road-market --mock     # or without --mock for Grok
+python run.py --scenario diwali-bazaar --mock        # or without --mock for Grok
 python monitor.py --runs-dir runs                    # http://127.0.0.1:8765
 ```
 

@@ -16,7 +16,7 @@ class MonitorServerTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         pool = ProviderPool({"provider": "mock"})
-        self.result = ScenarioRunner(get_scenario("salt-road-market"), pool, seed=1,
+        self.result = ScenarioRunner(get_scenario("diwali-bazaar"), pool, seed=1,
                                      runs_dir=self.tmp.name, run_id="demo-run").run()
         self.server = serve(self.tmp.name, "127.0.0.1", 0)
         self.port = self.server.server_address[1]

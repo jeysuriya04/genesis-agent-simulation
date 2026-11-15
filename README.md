@@ -70,13 +70,13 @@ Agents answer with a **strict JSON-schema** action (`response_format: json_schem
 python run.py --list-scenarios                 # validates and lists scenarios/*.json
 
 # With Grok (needs XAI_API_KEY):
-python run.py --scenario drought-village       # cooperation, 5 agents, 10 turns
-python run.py --scenario salt-road-market      # competition, 4 agents, 8 turns
-python run.py --scenario crater-council        # decision-making, 5 agents, 7 turns
-python run.py --scenario station-sabotage      # mixed motives + hidden saboteur, 4 agents, 8 turns
+python run.py --scenario ram-setu               # cooperation, 5 agents, 10 turns
+python run.py --scenario diwali-bazaar          # competition, 4 agents, 8 turns
+python run.py --scenario ayodhya-sabha          # decision-making, 5 agents, 7 turns
+python run.py --scenario lanka-spy              # mixed motives + hidden spy, 4 agents, 8 turns
 
 # Offline, no key (deterministic mock agents):
-python run.py --scenario crater-council --mock --seed 0
+python run.py --scenario ayodhya-sabha --mock --seed 0
 
 # Useful flags:
 #   --turns N            cap the scenario's turn limit      --seed N         resolution-order seed

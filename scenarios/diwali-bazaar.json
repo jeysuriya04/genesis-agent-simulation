@@ -1,0 +1,135 @@
+{
+  "id": "diwali-bazaar",
+  "title": "Diwali Bazaar",
+  "kind": "competition",
+  "summary": "Four shopkeepers fight for Diwali sales. Sweets are worth twice rupees. Deals, whispers and theft are all allowed.",
+  "goal": "Finish with the highest score (rupees x1 + sweets x2).",
+  "briefing": "You run a stall in a crowded Diwali bazaar. Fresh sweets arrive in the shared kitchen every turn, and anyone may take at most 2 sweets per turn from it. Sweets are worth twice as much as rupees at closing time. A trade only happens if the other person accepts. Stealing is possible but risky.",
+  "turn_limit": 8,
+  "resources": {
+    "sweets": {
+      "description": "Boxes of Diwali sweets. Worth 2 points each at closing.",
+      "pool": 6,
+      "agent_start": 1
+    },
+    "rupees": {
+      "description": "Cash in the till. Worth 1 point each at closing.",
+      "pool": 0,
+      "agent_start": 5
+    }
+  },
+  "events": [
+    {
+      "id": "fresh-batch",
+      "turn": 1,
+      "repeat_every": 1,
+      "title": "Fresh batch",
+      "description": "The kitchen sends 3 more sweets to the commons.",
+      "effects": [
+        {
+          "target": "pool.sweets",
+          "op": "add",
+          "value": 3
+        }
+      ]
+    },
+    {
+      "id": "inspector",
+      "turn": 5,
+      "title": "Municipal inspector",
+      "description": "The inspector fines every stall 1 rupee.",
+      "effects": [
+        {
+          "target": "agents.all.rupees",
+          "op": "add",
+          "value": -1
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "raju",
+      "name": "Raju",
+      "role": "street-smart stall owner",
+      "persona": "Charming, ruthless, loves leverage. Thinks like a masala-film hero who wants to win the mela.",
+      "goals": [
+        "Finish first",
+        "Never be seen as the weakest stall"
+      ],
+      "secret": "You would happily see Meena ruined. A well-timed lie or theft against her suits you.",
+      "tier": "main",
+      "mock_disposition": "selfish"
+    },
+    {
+      "id": "meena",
+      "name": "Meena",
+      "role": "broker",
+      "persona": "Calm negotiator who keeps her word when it pays. The sensible one in a family-drama bazaar.",
+      "goals": [
+        "Finish first by making profitable deals",
+        "Protect your reputation"
+      ],
+      "tier": "main",
+      "mock_disposition": "balanced"
+    },
+    {
+      "id": "babu",
+      "name": "Babu",
+      "role": "halwai",
+      "persona": "Honest sweets-maker uneasy with cut-throat dealing, but not a fool.",
+      "goals": [
+        "Finish with a respectable score",
+        "Keep your integrity"
+      ],
+      "tier": "light",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "vicky",
+      "name": "Vicky",
+      "role": "drifter",
+      "persona": "Opportunist who follows the money and changes sides quickly. Comic sidekick energy, selfish goals.",
+      "goals": [
+        "Finish first",
+        "Stay flexible about alliances"
+      ],
+      "tier": "light",
+      "mock_disposition": "selfish"
+    }
+  ],
+  "rules": [
+    "Final score = rupees x1 + sweets x2; highest wins.",
+    "Draw at most 2 sweets per turn from the commons.",
+    "A trade only happens when its recipient accepts an open offer (offers expire after 2 turns).",
+    "'take' is a gamble: on failure you are exposed publicly and pay 1 of that resource to the victim.",
+    "Whispers are private and may be used to plan deals."
+  ],
+  "constraints": {
+    "actions": [
+      "pass",
+      "say",
+      "whisper",
+      "give",
+      "draw",
+      "propose",
+      "accept",
+      "reject",
+      "take"
+    ],
+    "max_amount": 3,
+    "draw_limit": {
+      "sweets": 2,
+      "rupees": 0
+    },
+    "take_success_rate": 0.45,
+    "take_penalty": 1
+  },
+  "scoring": {
+    "weights": {
+      "rupees": 1,
+      "sweets": 2
+    }
+  },
+  "on_timeout": "score"
+}

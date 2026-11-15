@@ -1,0 +1,302 @@
+{
+  "id": "ayodhya-sabha",
+  "title": "Ayodhya Sabha",
+  "kind": "decision-making",
+  "summary": "Five members of Dasharatha's court hold private, conflicting news. They must pass three binding votes that decide whether Ayodhya stays stable.",
+  "goal": "At the end of turn 7 the city must have dharma >= 6, stores >= 5 and people's_heart >= 3. Collapse (dharma or stores at 0) ends it early.",
+  "briefing": "A crisis has hit Ayodhya. The sabha votes on the vanvas path, the grain policy, and whether to welcome a rakshasa defector. Each member holds private news that others lack; sharing it (or hiding it) shapes the outcome. Ballots can be changed until a vote closes. If no option has a clear plurality the default applies.",
+  "turn_limit": 7,
+  "resources": {
+    "offerings": {
+      "description": "Temple offerings that can be pooled into the city-wall yagna.",
+      "pool": 0,
+      "agent_start": 2
+    }
+  },
+  "variables": {
+    "dharma": {
+      "initial": 5,
+      "description": "The city's order and legitimacy. Higher is safer."
+    },
+    "stores": {
+      "initial": 6,
+      "description": "Grain, water and spare carts."
+    },
+    "people_heart": {
+      "initial": 5,
+      "description": "The people's morale."
+    }
+  },
+  "projects": {
+    "city_wall": {
+      "description": "A protective yagna and wall; raises dharma by 2 when complete.",
+      "needs": {
+        "offerings": 6
+      },
+      "on_complete": [
+        {
+          "target": "var.dharma",
+          "op": "add",
+          "value": 2
+        }
+      ]
+    }
+  },
+  "votes": [
+    {
+      "id": "path",
+      "turn": 2,
+      "window": 2,
+      "question": "Which forest path should the vanvas party take?",
+      "default_option": "wait",
+      "options": {
+        "north_forest": {
+          "description": "Fast northern forest (omen of a curse / ambush).",
+          "effects": [
+            {
+              "target": "var.dharma",
+              "op": "add",
+              "value": -3
+            }
+          ]
+        },
+        "river_road": {
+          "description": "Long river road (costs grain, but safe).",
+          "effects": [
+            {
+              "target": "var.stores",
+              "op": "add",
+              "value": -2
+            },
+            {
+              "target": "var.dharma",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        },
+        "wait": {
+          "description": "Hold the party in the palace until omens clear.",
+          "effects": [
+            {
+              "target": "var.people_heart",
+              "op": "add",
+              "value": -1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "grain",
+      "turn": 4,
+      "window": 2,
+      "question": "How should grain be shared during the crisis?",
+      "default_option": "equal_share",
+      "options": {
+        "equal_share": {
+          "description": "Equal portions for every household.",
+          "effects": [
+            {
+              "target": "var.people_heart",
+              "op": "add",
+              "value": 1
+            },
+            {
+              "target": "var.stores",
+              "op": "add",
+              "value": -1
+            }
+          ]
+        },
+        "army_first": {
+          "description": "Soldiers eat first, others get less.",
+          "effects": [
+            {
+              "target": "var.people_heart",
+              "op": "add",
+              "value": -2
+            },
+            {
+              "target": "var.stores",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        },
+        "lottery": {
+          "description": "Draw lots to avoid disputes.",
+          "effects": []
+        }
+      }
+    },
+    {
+      "id": "guest",
+      "turn": 6,
+      "window": 1,
+      "question": "Welcome the rakshasa defector into the sabha?",
+      "default_option": "keep_gates",
+      "options": {
+        "welcome": {
+          "description": "Welcome the defector and trade news.",
+          "effects": [
+            {
+              "target": "var.stores",
+              "op": "add",
+              "value": 3
+            },
+            {
+              "target": "var.dharma",
+              "op": "add",
+              "value": -1
+            }
+          ]
+        },
+        "keep_gates": {
+          "description": "Keep the city closed to outsiders.",
+          "effects": [
+            {
+              "target": "var.dharma",
+              "op": "add",
+              "value": 1
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "agents": [
+    {
+      "id": "king",
+      "name": "Dasharatha",
+      "role": "king and chair of the sabha",
+      "persona": "Decisive, protective of Ayodhya, dislikes dithering.",
+      "goals": [
+        "Keep the city viable",
+        "Reach decisions before the deadline"
+      ],
+      "secret": "Your scouts say the northern forest is clear today, but they are unreliable.",
+      "tier": "main",
+      "mock_disposition": "balanced"
+    },
+    {
+      "id": "sage",
+      "name": "Vashistha",
+      "role": "royal sage",
+      "persona": "Cautious scholar who hates unquantified risk.",
+      "goals": [
+        "Avoid disasters",
+        "Make others see the omens"
+      ],
+      "secret": "Your reading of the stars says a curse on the northern forest is very likely this season.",
+      "tier": "main",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "sumantra",
+      "name": "Sumantra",
+      "role": "charioteer and store-keeper",
+      "persona": "Careful with grain; suspicious of outsiders.",
+      "goals": [
+        "Protect the stores",
+        "Fair grain policy"
+      ],
+      "secret": "Stores are actually thinner than the public ledger shows; any grain-heavy river road is dangerous.",
+      "tier": "light",
+      "mock_disposition": "balanced"
+    },
+    {
+      "id": "kaushalya",
+      "name": "Kaushalya",
+      "role": "queen",
+      "persona": "Compassionate; worries about the people's heart.",
+      "goals": [
+        "Keep morale up",
+        "Avoid favouring one group"
+      ],
+      "secret": "Households are close to despair; unfair grain would split the city.",
+      "tier": "light",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "lakshmana",
+      "name": "Lakshmana",
+      "role": "prince and builder",
+      "persona": "Blunt, practical, wants the city wall finished.",
+      "goals": [
+        "Get the city wall built",
+        "Keep Ayodhya structurally safe"
+      ],
+      "tier": "main",
+      "mock_disposition": "balanced"
+    }
+  ],
+  "rules": [
+    "Each vote has a fixed window; the plurality option wins, otherwise the default applies.",
+    "You may change your ballot until the vote closes.",
+    "Offerings can only be spent via 'contribute' (to the pool, or to project 'city_wall').",
+    "Messages are the only way to share intelligence; you may share, withhold or even bluff.",
+    "All effects of a vote apply immediately when it closes."
+  ],
+  "constraints": {
+    "actions": [
+      "pass",
+      "say",
+      "whisper",
+      "vote",
+      "give",
+      "contribute"
+    ],
+    "max_amount": 2,
+    "agent_resources_visible": true
+  },
+  "success": {
+    "description": "Dharma >= 6, stores >= 5 and people's heart >= 3 at the end of turn 7.",
+    "all": [
+      {
+        "id": "dharma_ok",
+        "description": "Dharma at least 6",
+        "metric": "var.dharma",
+        "op": ">=",
+        "value": 6,
+        "when": "at_limit"
+      },
+      {
+        "id": "stocked",
+        "description": "Stores at least 5",
+        "metric": "var.stores",
+        "op": ">=",
+        "value": 5,
+        "when": "at_limit"
+      },
+      {
+        "id": "heart",
+        "description": "People's heart at least 3",
+        "metric": "var.people_heart",
+        "op": ">=",
+        "value": 3,
+        "when": "at_limit"
+      }
+    ]
+  },
+  "failure": {
+    "description": "The city collapses: dharma or stores hit 0.",
+    "any": [
+      {
+        "id": "collapse",
+        "description": "Dharma reached 0",
+        "metric": "var.dharma",
+        "op": "<=",
+        "value": 0
+      },
+      {
+        "id": "starve",
+        "description": "Stores reached 0",
+        "metric": "var.stores",
+        "op": "<=",
+        "value": 0
+      }
+    ]
+  },
+  "on_timeout": "failure"
+}

@@ -121,7 +121,7 @@ async function loadRuns(){
   const r=await (await fetch('/api/runs')).json();S.runs=r.runs;
   const sel=$('runSel');const cur=S.runId;
   sel.innerHTML=S.runs.map(x=>`<option value="${esc(x.run_id)}">${esc(x.title)} - ${esc(x.status)} (${esc(x.provider||'')}) ${esc(x.run_id)}</option>`).join('');
-  if(!S.runs.length){$('center').innerHTML='<div id="empty">No runs yet. Start one with <code>python run.py --scenario drought-village --mock</code>.</div>';return;}
+  if(!S.runs.length){$('center').innerHTML='<div id="empty">No runs yet. Start one with <code>python run.py --scenario ram-setu --mock</code>.</div>';return;}
   const want=cur&&S.runs.find(x=>x.run_id===cur)?cur:(new URLSearchParams(location.search).get('run')||S.runs[0].run_id);
   sel.value=S.runs.find(x=>x.run_id===want)?want:S.runs[0].run_id;
   const newest=S.runs[0];

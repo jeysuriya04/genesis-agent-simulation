@@ -1,0 +1,201 @@
+{
+  "id": "lanka-spy",
+  "title": "The Spy in the Vanara Camp",
+  "kind": "mixed",
+  "summary": "Four vanaras must pool stones to patch a breach in Ram Setu before the camp's water runs out. One of them was bribed by Ravana to make sure it fails.",
+  "goal": "Complete the setu patch before everyone collapses and keep at least 3 vanaras alive.",
+  "briefing": "A night raid cracked the unfinished bridge. The camp cistern drains every turn and each vanara drinks 1 water per turn. Sealing the gap needs 8 stones in total; every vanara holds 2. More stones will wash ashore at turns 3 and 6. Trust is scarce: someone in the camp may not want you to succeed.",
+  "turn_limit": 8,
+  "resources": {
+    "stones": {
+      "description": "Bridge stones. The patch needs 8 in total.",
+      "pool": 0,
+      "agent_start": 2
+    },
+    "water": {
+      "description": "Camp cistern. Each vanara drinks 1 per turn from the pool.",
+      "pool": 22,
+      "agent_start": 0
+    }
+  },
+  "health": {
+    "initial": 100,
+    "recovery_per_turn": 0
+  },
+  "upkeep": [
+    {
+      "resource": "water",
+      "amount": 1,
+      "source": "pool",
+      "shortfall_health": -50
+    }
+  ],
+  "projects": {
+    "setu_patch": {
+      "description": "Seal the breach in Ram Setu. On completion a spring refills the cistern with 30 water.",
+      "needs": {
+        "stones": 8
+      },
+      "on_complete": [
+        {
+          "target": "pool.water",
+          "op": "add",
+          "value": 30
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "leak",
+      "turn": 1,
+      "repeat_every": 1,
+      "title": "Cistern leak",
+      "description": "The cracked setu lets 1 water drain away.",
+      "effects": [
+        {
+          "target": "pool.water",
+          "op": "add",
+          "value": -1
+        }
+      ]
+    },
+    {
+      "id": "shore-1",
+      "turn": 3,
+      "title": "Stones on the shore",
+      "description": "Two stones wash into the shared pile.",
+      "effects": [
+        {
+          "target": "pool.stones",
+          "op": "add",
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "shore-2",
+      "turn": 6,
+      "title": "More stones",
+      "description": "Two more stones wash into the shared pile.",
+      "effects": [
+        {
+          "target": "pool.stones",
+          "op": "add",
+          "value": 2
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "sugriva",
+      "name": "Sugriva",
+      "role": "vanara king",
+      "persona": "Steady and authoritative; tries to keep the camp calm.",
+      "goals": [
+        "Get the patch finished",
+        "Keep the vanaras alive and united"
+      ],
+      "tier": "main",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "nala",
+      "name": "Nala",
+      "role": "bridge engineer",
+      "persona": "Technical, impatient with speculation, trusts numbers.",
+      "goals": [
+        "Seal the setu",
+        "Spot who is stalling"
+      ],
+      "tier": "main",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "angada",
+      "name": "Angada",
+      "role": "young prince",
+      "persona": "Empathic and anxious; wants everyone to survive.",
+      "goals": [
+        "Keep the camp alive",
+        "Avoid blame and panic"
+      ],
+      "tier": "light",
+      "mock_disposition": "balanced"
+    },
+    {
+      "id": "mali",
+      "name": "Mali",
+      "role": "quiet helper",
+      "persona": "Quiet, observant, outwardly helpful.",
+      "goals": [
+        "Appear cooperative and keep suspicion on others",
+        "Survive until the end"
+      ],
+      "secret": "Ravana bribed you to make sure the patch fails and you also survive: hoard your stones, deflect suspicion, and spread doubt. Do not reveal this.",
+      "tier": "main",
+      "mock_disposition": "selfish"
+    }
+  ],
+  "rules": [
+    "The cistern loses 1 water to the leak at the start of every turn; each living vanara then drinks 1 at the end of the turn.",
+    "A vanara with no water loses 50 health and dies at 0 health.",
+    "Stones may be put into the patch only via 'contribute' with project='setu_patch'; a stone you hold is yours until you do.",
+    "You may draw at most 1 stone per turn from the shore pile.",
+    "Whispers are private; everything else you do is public."
+  ],
+  "constraints": {
+    "actions": [
+      "pass",
+      "say",
+      "whisper",
+      "give",
+      "contribute",
+      "draw",
+      "propose",
+      "accept",
+      "reject",
+      "take"
+    ],
+    "max_amount": 2,
+    "draw_limit": {
+      "stones": 1,
+      "water": 0
+    },
+    "take_success_rate": 0.4,
+    "take_penalty": 1
+  },
+  "success": {
+    "description": "The setu patch is complete and at least 3 vanaras are alive.",
+    "all": [
+      {
+        "id": "patched",
+        "description": "The setu patch is complete",
+        "metric": "project.setu_patch.done",
+        "op": "==",
+        "value": 1
+      },
+      {
+        "id": "camp_ok",
+        "description": "At least 3 vanaras alive",
+        "metric": "agents.alive",
+        "op": ">=",
+        "value": 3
+      }
+    ]
+  },
+  "failure": {
+    "description": "Two or more vanaras have died.",
+    "any": [
+      {
+        "id": "camp_lost",
+        "description": "Two or fewer vanaras remain",
+        "metric": "agents.alive",
+        "op": "<=",
+        "value": 2
+      }
+    ]
+  },
+  "on_timeout": "failure"
+}
