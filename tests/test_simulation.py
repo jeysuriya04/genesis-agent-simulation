@@ -175,7 +175,7 @@ class SimulationTests(unittest.TestCase):
             self.assertEqual(con.execute("SELECT COUNT(*) FROM runs").fetchone()[0], 1)
             self.assertEqual(
                 con.execute(
-                    "SELECT COUNT(*) FROM events WHERE scenario_id = 'opening-council'"
+                    "SELECT COUNT(*) FROM events WHERE scenario_id = 'vanara-council'"
                 ).fetchone()[0],
                 6,
             )
@@ -282,7 +282,7 @@ class SimulationTests(unittest.TestCase):
     def test_scenario_configuration_is_loadable_and_validated(self):
         scenarios = load_scenarios(BASE / "scenarios.json")
         self.assertEqual(scenarios["version"], "1.0")
-        self.assertEqual(scenarios["scenarios"][0]["id"], "opening-council")
+        self.assertEqual(scenarios["scenarios"][0]["id"], "vanara-council")
 
     def test_virtual_day_resource_shortage_and_world_event_are_persisted(self):
         config = json.loads((BASE / "config.json").read_text())

@@ -3,7 +3,7 @@
 ![dashboard](./img/dashboard.png)
 
 ```bash
-python run.py --scenario diwali-bazaar --mock        # or without --mock for Grok
+python run.py --scenario ram-setu --mock             # or without --mock for Grok
 python monitor.py --runs-dir runs                    # http://127.0.0.1:8765
 ```
 
@@ -11,7 +11,8 @@ The monitor is a local, dependency-free web app (stdlib HTTP server + one HTML f
 JS/SVG, so it works offline). It reads `runs/<run_id>/events.jsonl` and polls for new events
 every second, so a run in progress shows up live (the page auto-switches to a newly started
 run unless you picked one yourself), and finished runs replay with the slider, play/pause,
-speed control and arrow keys.
+speed control and arrow keys. **Download log** in the header saves the selected run's
+`events.jsonl` (also at `runs/<run_id>/events.jsonl` on disk).
 
 ## What you see
 

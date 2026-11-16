@@ -70,6 +70,7 @@ svg text{fill:var(--text);font:11px sans-serif}.legend span{margin-right:12px;wh
 <header>
   <div class="brand">GENESIS <b>MONITOR</b></div>
   <select id="runSel" title="Run"></select>
+  <button id="bDownload" title="Download this run's event log">Download log</button>
   <span id="status" class="pill">-</span>
   <span id="kindInfo" class="mute"></span>
   <div class="stats">
@@ -383,6 +384,7 @@ $('slider').oninput=e=>{stopPlay();setTurn(+e.target.value)};
 $('speed').onchange=()=>{if(S.playing)startPlay()};
 $('bLive').onclick=()=>{S.live=!S.live;$('bLive').classList.toggle('on',S.live);if(S.live){followLive();render();}};
 $('runSel').onchange=e=>{S.pinned=true;selectRun(e.target.value)};
+$('bDownload').onclick=()=>{if(!S.runId)return;const a=document.createElement('a');a.href=`/api/runs/${encodeURIComponent(S.runId)}/download`;a.download=`${S.runId}-events.jsonl`;document.body.appendChild(a);a.click();a.remove();};
 document.addEventListener('keydown',e=>{if(e.target.tagName==='SELECT')return;if(e.key==='ArrowRight')setTurn(S.turn+1);if(e.key==='ArrowLeft')setTurn(S.turn-1);if(e.key===' '){e.preventDefault();S.playing?stopPlay():startPlay();}});
 loadRuns();setInterval(loadRuns,5000);
 </script>

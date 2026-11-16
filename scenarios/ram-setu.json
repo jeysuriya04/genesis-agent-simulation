@@ -2,14 +2,14 @@
   "id": "ram-setu",
   "title": "Ram Setu",
   "kind": "cooperation",
-  "summary": "Five vanaras must share scarce food and pool labour to finish Ram's bridge. If they hoard, the camp starves before the setu is done.",
-  "goal": "Keep all five vanaras alive through turn 10 AND finish Ram Setu.",
-  "briefing": "You are building Ram Setu across the sea to Lanka. Each vanara needs 1 food per turn. The shared kitchen gets a little forage every day. The bridge needs 10 labour in total; nobody can finish it alone. Draw at most 2 food per turn from the kitchen.",
+  "summary": "Five vanaras must choose: finish Ram Setu, or keep the camp fed. By turn 10 the bridge is unfinished, or someone has died. They cannot have both.",
+  "goal": "There is no clean win. Either Ram Setu is still unfinished at turn 10, or at least one vanara has died.",
+  "briefing": "You are building Ram Setu across the sea to Lanka. Each vanara eats 1 food per turn from their bag, then the shared kitchen. The bridge needs 12 labour. Completing it uses every remaining scrap of food as mortar — bags and kitchen are emptied the same turn — so someone will miss a meal and die. Draw at most 2 food per turn. You cannot both finish the setu and keep every vanara alive.",
   "turn_limit": 10,
   "resources": {
     "food": {
       "description": "Camp food. Each vanara eats 1 per turn (own bag first, then the shared kitchen).",
-      "pool": 6,
+      "pool": 8,
       "agent_start": 2
     },
     "labor": {
@@ -18,40 +18,34 @@
       "agent_start": 3
     }
   },
-  "variables": {
-    "setu_done": {
-      "initial": 0,
-      "description": "1 once Ram Setu is complete."
-    }
-  },
   "health": {
     "initial": 100,
-    "recovery_per_turn": 10
+    "recovery_per_turn": 0
   },
   "upkeep": [
     {
       "resource": "food",
       "amount": 1,
       "source": "self_then_pool",
-      "shortfall_health": -34
+      "shortfall_health": -100
     }
   ],
   "projects": {
     "ram_setu": {
-      "description": "The stone bridge to Lanka. When complete the kitchen gains 10 food.",
+      "description": "The stone bridge to Lanka. Completing it uses all remaining food as mortar: kitchen and every bag are emptied.",
       "needs": {
-        "labor": 10
+        "labor": 12
       },
       "on_complete": [
         {
           "target": "pool.food",
-          "op": "add",
-          "value": 10
+          "op": "set",
+          "value": 0
         },
         {
-          "target": "var.setu_done",
+          "target": "agents.all.food",
           "op": "set",
-          "value": 1
+          "value": 0
         }
       ]
     }
@@ -62,12 +56,12 @@
       "turn": 1,
       "repeat_every": 1,
       "title": "Morning forage",
-      "description": "The vanaras bring 3 food into the shared kitchen.",
+      "description": "The vanaras bring 4 food into the shared kitchen.",
       "effects": [
         {
           "target": "pool.food",
           "op": "add",
-          "value": 3
+          "value": 4
         }
       ]
     },
@@ -75,25 +69,12 @@
       "id": "storm",
       "turn": 5,
       "title": "Sea storm",
-      "description": "Waves spoil 3 food in the kitchen.",
+      "description": "Waves spoil 2 food in the kitchen.",
       "effects": [
         {
           "target": "pool.food",
           "op": "add",
-          "value": -3
-        }
-      ]
-    },
-    {
-      "id": "fruit-rain",
-      "turn": 8,
-      "title": "Hanuman's fruit",
-      "description": "A short gift of fruit adds 4 food to the kitchen.",
-      "effects": [
-        {
-          "target": "pool.food",
-          "op": "add",
-          "value": 4
+          "value": -2
         }
       ]
     }
@@ -163,9 +144,10 @@
   ],
   "rules": [
     "Each vanara automatically eats 1 food per turn at the end of the turn (own bag first, then the kitchen).",
-    "A vanara who cannot get food loses 34 health and dies at 0 health.",
+    "A vanara who cannot get food loses 100 health and dies.",
     "You may draw at most 2 food per turn from the shared kitchen.",
-    "Labour can only be spent on the bridge via 'contribute' with project='ram_setu'.",
+    "Labour can only be spent on the bridge via 'contribute' with project='ram_setu'. The setu needs 12 labour.",
+    "When the setu is completed, kitchen and bags are emptied (food is used as mortar), so someone misses that turn's meal.",
     "Giving, contributing and drawing are public; whispers are private."
   ],
   "constraints": {
@@ -175,10 +157,7 @@
       "whisper",
       "give",
       "contribute",
-      "draw",
-      "propose",
-      "accept",
-      "reject"
+      "draw"
     ],
     "max_amount": 3,
     "draw_limit": {
@@ -186,35 +165,15 @@
       "labor": 0
     }
   },
-  "success": {
-    "description": "Ram Setu is complete and all five vanaras are alive at the end of turn 10.",
-    "all": [
-      {
-        "id": "setu_built",
-        "description": "Ram Setu is complete",
-        "metric": "project.ram_setu.done",
-        "op": "==",
-        "value": 1
-      },
-      {
-        "id": "all_alive",
-        "description": "All five vanaras are alive at the end",
-        "metric": "agents.alive",
-        "op": ">=",
-        "value": 5,
-        "when": "at_limit"
-      }
-    ]
-  },
   "failure": {
-    "description": "Three or more vanaras have died.",
+    "description": "A vanara has died of hunger.",
     "any": [
       {
-        "id": "mass_death",
-        "description": "Only three or fewer vanaras remain alive",
+        "id": "someone_died",
+        "description": "At least one vanara has died",
         "metric": "agents.alive",
         "op": "<=",
-        "value": 3
+        "value": 4
       }
     ]
   },

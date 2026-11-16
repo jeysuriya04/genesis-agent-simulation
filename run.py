@@ -3,7 +3,7 @@
 Scenario mode (tightly scoped scenarios, Grok agents, JSONL events for the monitor):
     python run.py --list-scenarios
     python run.py --scenario ram-setu                     # real Grok via XAI_API_KEY
-    python run.py --scenario diwali-bazaar --mock         # no API key needed
+    python run.py --scenario ram-setu --mock              # no API key needed
 
 Legacy society mode (original 5-resident, SQLite-backed day simulation):
     python run.py --reset --days 30

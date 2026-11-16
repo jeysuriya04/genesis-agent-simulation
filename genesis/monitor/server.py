@@ -62,6 +62,22 @@ def make_handler(runs_dir: Path):
                 finished = bool(events) and events[-1]["type"] == "run_end" or any(
                     e["type"] == "run_end" for e in events)
                 return self._json({"events": events, "finished": finished})
+            if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "download":
+                run_id = parts[2]
+                if not RUN_ID_RE.match(run_id):
+                    return self._json({"error": "bad run id"}, HTTPStatus.BAD_REQUEST)
+                path = runs_dir / run_id / "events.jsonl"
+                if not path.exists():
+                    return self._json({"error": "unknown run"}, HTTPStatus.NOT_FOUND)
+                body = path.read_bytes()
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "application/x-ndjson; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Content-Disposition", f'attachment; filename="{run_id}-events.jsonl"')
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             self._json({"error": "not found"}, HTTPStatus.NOT_FOUND)
 
     return Handler

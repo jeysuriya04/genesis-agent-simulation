@@ -8,10 +8,15 @@ validates every bundled file with `python run.py --list-scenarios`.
 
 | id | kind | agents | turns | tension |
 |---|---|---|---|---|
-| `ram-setu` | cooperation | 5 | 10 | Vanaras must pool *labor* into Ram Setu (needs 10 of 15 labour) while a trickle of food is split among them. Hoarding kills people. Win: setu built and all alive at turn 10. Lose: <= 3 alive. |
-| `diwali-bazaar` | competition | 4 | 8 | Four Diwali stall-owners. Score = rupees + 2 x sweets, highest wins. Trades need acceptance, `take` is a gamble, whispers allow collusion, one stall has a secret grudge. |
-| `ayodhya-sabha` | decision-making | 5 | 7 | Three binding votes (vanvas path, grain, guest) with consequences on dharma/stores/people's heart. Each member holds *private intelligence*. Optional city-wall yagna funded by offerings. |
-| `lanka-spy` | mixed | 4 | 8 | The setu is leaking. The camp must put all 8 stones into the patch, but one vanara is Ravana's spy. Stones wash ashore at turns 3 and 6; trust is the scarce resource. |
+| `ram-setu` | cooperation | 5 | 10 | Vanaras must pool *labor* into Ram Setu (needs 12 of 15 labour). Completing the bridge empties all food. By turn 10 either someone has died, or the setu is still unfinished. They cannot have both a finished bridge and a living camp. |
+
+## Execution
+
+Scenario run and turn flow is orchestrated with a LangGraph `StateGraph`: it starts the run,
+applies turn events, gathers agent decisions, resolves actions, performs upkeep, and routes to
+the next turn or the final outcome. The scenario engine still owns the simulation rules,
+structured-action validation, and world-state updates; LangGraph does not replace those domain
+components. Agent model calls remain concurrent within each turn.
 
 ## Schema
 
@@ -75,5 +80,5 @@ moves for the mock, so they cannot disagree.
 
 1. Copy a bundled file, change ids/resources/agents/conditions.
 2. `python run.py --list-scenarios` to validate (errors list every offending path).
-3. `python run.py --scenario ayodhya-sabha --mock --seed 0` and watch it in `python monitor.py`.
+3. `python run.py --scenario ram-setu --mock --seed 0` and watch it in `python monitor.py`.
    Tune numbers until the mock produces a mix of outcomes, then try real Grok agents.

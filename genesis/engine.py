@@ -12,7 +12,9 @@ import json
 import random
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple, TypedDict
+
+from langgraph.graph import END, START, StateGraph
 
 from genesis.actions import ActionRules
 from genesis.events import EventLog
@@ -22,6 +24,14 @@ from genesis.llm import (
 from genesis.scenario_spec import OPS
 
 RECENT_LOG = 10
+
+
+class ScenarioGraphState(TypedDict, total=False):
+    turn: int
+    outcome: Optional[str]
+    reason: str
+    winner: Optional[str]
+    result: dict
 
 
 # --------------------------------------------------------------------------- world
@@ -500,9 +510,30 @@ class ScenarioRunner:
         return {"action": action, "validation": {"flags": flags, "errors": errors, "raw": raw[:1500]},
                 "llm": llm}
 
-    # -- main loop -----------------------------------------------------------
-    def run(self) -> dict:
-        spec, world, limit = self.spec, self.world, self.spec["turn_limit"]
+    # -- LangGraph run graph -------------------------------------------------
+    def _build_run_graph(self):
+        graph = StateGraph(ScenarioGraphState)
+        graph.add_node("run_start", self._graph_run_start)
+        graph.add_node("begin_turn", self._graph_begin_turn)
+        graph.add_node("play_turn", self._graph_play_turn)
+        graph.add_node("finish_turn", self._graph_finish_turn)
+        graph.add_node("timeout", self._graph_timeout)
+        graph.add_node("finalize", self._graph_finalize)
+        graph.add_edge(START, "run_start")
+        graph.add_edge("run_start", "begin_turn")
+        graph.add_edge("begin_turn", "play_turn")
+        graph.add_edge("play_turn", "finish_turn")
+        graph.add_conditional_edges(
+            "finish_turn",
+            self._graph_next_step,
+            {"continue": "begin_turn", "timeout": "timeout", "finalize": "finalize"},
+        )
+        graph.add_edge("timeout", "finalize")
+        graph.add_edge("finalize", END)
+        return graph.compile()
+
+    def _graph_run_start(self, state: ScenarioGraphState) -> dict:
+        spec, world = self.spec, self.world
         agents_meta = []
         for index, agent in enumerate(spec["agents"]):
             info = self.resolved[agent["id"]]
@@ -517,77 +548,114 @@ class ScenarioRunner:
         scenario_info["scoring"] = spec.get("scoring")
         self.log.emit("run_start", scenario=scenario_info, agents=agents_meta, seed=self.seed,
                       provider=self.pool.config["provider"], state=public_state(world))
-        outcome, reason, winner = None, "", None
+        return {"turn": 0, "outcome": None, "reason": "", "winner": None}
+
+    def _graph_begin_turn(self, state: ScenarioGraphState) -> dict:
+        turn = state["turn"] + 1
+        self.world["turn"] = turn
+        events_now = self._scheduled_events(turn)
+        self.log.emit("turn_start", turn=turn, state=public_state(self.world))
+        for event in events_now:
+            before = flatten(self.world, self.spec)
+            for effect in event.get("effects", []):
+                apply_effect(self.world, self.spec, effect)
+            changes = diff(before, flatten(self.world, self.spec))
+            self.world["public_log"].append({
+                "turn": turn, "agent_id": None, "agent": "WORLD", "kind": "event",
+                "text": f"{event['title']}: {event['description']}",
+            })
+            self.log.emit("world_event", turn=turn, event_id=event["id"], title=event["title"],
+                          description=event["description"], changes=changes)
+        return {"turn": turn}
+
+    def _graph_play_turn(self, state: ScenarioGraphState) -> dict:
+        turn = state["turn"]
+        living = [aid for aid, agent in self.world["agents"].items() if agent["alive"]]
+        events_now = self._scheduled_events(turn)
+        perceptions = {aid: build_perception(self.world, self.spec, self.rules, aid, events_now)
+                       for aid in living}
+        with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
+            futures = {aid: executor.submit(self._decide, aid, perceptions[aid]) for aid in living}
+            decisions = {aid: future.result() for aid, future in futures.items()}
+        order = list(living)
+        random.Random(f"{self.seed}:{turn}").shuffle(order)
+        resolver = Resolver(self.world, self.spec, self.seed)
+        for position, aid in enumerate(order):
+            decision = decisions[aid]
+            effect = resolver.resolve(aid, decision["action"])
+            if effect["flags"]:
+                decision["validation"]["flags"] += effect["flags"]
+            step = self.log.emit(
+                "agent_step", turn=turn, agent_id=aid, order=position,
+                perception=perceptions[aid], reasoning=decision["action"].get("reasoning", ""),
+                action=decision["action"], validation=decision["validation"],
+                effect=effect, llm=decision["llm"])
+            if self.progress:
+                self.progress(step)
+        return {}
+
+    def _graph_finish_turn(self, state: ScenarioGraphState) -> dict:
+        turn = state["turn"]
+        turn_report = self._end_of_turn(turn)
+        flat = flatten(self.world, self.spec)
+        success, success_details = evaluate_group(
+            self.spec.get("success"), flat, turn, self.spec["turn_limit"])
+        failure, failure_details = evaluate_group(
+            self.spec.get("failure"), flat, turn, self.spec["turn_limit"])
+        self.log.emit("turn_end", turn=turn, state=public_state(self.world), report=turn_report,
+                      conditions={"success": success_details, "failure": failure_details},
+                      scores=scores_for(self.world, self.spec), usage=self.tracker.summary())
+        outcome, reason = None, ""
+        if failure:
+            outcome, reason = "failure", "A failure condition was met."
+        elif success:
+            outcome, reason = "success", "All success conditions were met."
+        elif not any(agent["alive"] for agent in self.world["agents"].values()):
+            outcome, reason = "failure", "Every agent was eliminated."
+        elif self.tracker.over_budget():
+            outcome, reason = "aborted_budget", \
+                f"Stopped: cost cap ${self.tracker.max_cost_usd} reached."
+        return {"outcome": outcome, "reason": reason}
+
+    def _graph_next_step(self, state: ScenarioGraphState) -> str:
+        if state["outcome"]:
+            return "finalize"
+        if state["turn"] >= self.spec["turn_limit"]:
+            return "timeout"
+        return "continue"
+
+    def _graph_timeout(self, state: ScenarioGraphState) -> dict:
+        outcome, reason, winner = self._timeout_outcome()
+        return {"outcome": outcome, "reason": reason, "winner": winner}
+
+    def _graph_finalize(self, state: ScenarioGraphState) -> dict:
+        outcome, reason, winner = state["outcome"], state["reason"], state.get("winner")
+        scores = scores_for(self.world, self.spec)
+        if outcome in ("success", "failure") and scores and winner is None \
+                and self.spec["kind"] == "competition":
+            winner = max(scores, key=scores.get)
+        result = {"run_id": self.run_id, "outcome": outcome, "reason": reason, "winner": winner,
+                  "scores": scores, "turns_played": self.world["turn"],
+                  "usage": self.tracker.summary(), "log_path": str(self.log.path)}
+        self.log.emit("run_end", outcome=outcome, reason=reason, winner=winner, scores=scores,
+                      turns_played=self.world["turn"], state=public_state(self.world),
+                      usage=result["usage"])
+        return {"winner": winner, "result": result}
+
+    def run(self) -> dict:
+        graph = self._build_run_graph()
         try:
-            for turn in range(1, limit + 1):
-                world["turn"] = turn
-                events_now = self._scheduled_events(turn)
-                self.log.emit("turn_start", turn=turn, state=public_state(world))
-                for event in events_now:
-                    before = flatten(world, spec)
-                    for effect in event.get("effects", []):
-                        apply_effect(world, spec, effect)
-                    changes = diff(before, flatten(world, spec))
-                    world["public_log"].append({"turn": turn, "agent_id": None, "agent": "WORLD",
-                                                "kind": "event", "text": f"{event['title']}: {event['description']}"})
-                    self.log.emit("world_event", turn=turn, event_id=event["id"], title=event["title"],
-                                  description=event["description"], changes=changes)
-                living = [a for a, v in world["agents"].items() if v["alive"]]
-                perceptions = {aid: build_perception(world, spec, self.rules, aid, events_now)
-                               for aid in living}
-                with ThreadPoolExecutor(max_workers=self.concurrency) as executor:
-                    futures = {aid: executor.submit(self._decide, aid, perceptions[aid]) for aid in living}
-                    decisions = {aid: f.result() for aid, f in futures.items()}
-                order = list(living)
-                random.Random(f"{self.seed}:{turn}").shuffle(order)
-                resolver = Resolver(world, spec, self.seed)
-                for position, aid in enumerate(order):
-                    decision = decisions[aid]
-                    effect = resolver.resolve(aid, decision["action"])
-                    if effect["flags"]:
-                        decision["validation"]["flags"] += effect["flags"]
-                    step = self.log.emit(
-                        "agent_step", turn=turn, agent_id=aid, order=position,
-                        perception=perceptions[aid], reasoning=decision["action"].get("reasoning", ""),
-                        action=decision["action"], validation=decision["validation"],
-                        effect=effect, llm=decision["llm"])
-                    if self.progress:
-                        self.progress(step)
-                turn_report = self._end_of_turn(turn)
-                flat = flatten(world, spec)
-                s_met, s_detail = evaluate_group(spec.get("success"), flat, turn, limit)
-                f_met, f_detail = evaluate_group(spec.get("failure"), flat, turn, limit)
-                self.log.emit("turn_end", turn=turn, state=public_state(world), report=turn_report,
-                              conditions={"success": s_detail, "failure": f_detail},
-                              scores=scores_for(world, spec), usage=self.tracker.summary())
-                if f_met:
-                    outcome, reason = "failure", "A failure condition was met."
-                elif s_met:
-                    outcome, reason = "success", "All success conditions were met."
-                elif not any(v["alive"] for v in world["agents"].values()):
-                    outcome, reason = "failure", "Every agent was eliminated."
-                elif self.tracker.over_budget():
-                    outcome, reason = "aborted_budget", \
-                        f"Stopped: cost cap ${self.tracker.max_cost_usd} reached."
-                if outcome:
-                    break
-            if outcome is None:
-                outcome, reason, winner = self._timeout_outcome()
+            final = graph.invoke(
+                {"turn": 0, "outcome": None, "reason": "", "winner": None},
+                config={"recursion_limit": self.spec["turn_limit"] * 5 + 10},
+            )
         except Exception as exc:  # keep the log well-formed for the dashboard
             outcome, reason = "error", f"{type(exc).__name__}: {exc}"
             self.log.emit("run_end", outcome=outcome, reason=reason, winner=None,
-                          scores=scores_for(world, spec), state=public_state(world),
+                          scores=scores_for(self.world, self.spec), state=public_state(self.world),
                           usage=self.tracker.summary())
             raise
-        scores = scores_for(world, spec)
-        if outcome in ("success", "failure") and scores and winner is None and spec["kind"] == "competition":
-            winner = max(scores, key=scores.get)
-        self.log.emit("run_end", outcome=outcome, reason=reason, winner=winner, scores=scores,
-                      turns_played=world["turn"], state=public_state(world),
-                      usage=self.tracker.summary())
-        return {"run_id": self.run_id, "outcome": outcome, "reason": reason, "winner": winner,
-                "scores": scores, "turns_played": world["turn"], "usage": self.tracker.summary(),
-                "log_path": str(self.log.path)}
+        return final["result"]
 
     def _timeout_outcome(self):
         spec, world = self.spec, self.world

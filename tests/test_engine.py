@@ -67,6 +67,18 @@ class EngineRuleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "timeout")
         self.assertEqual(result["turns_played"], 2)
 
+    def test_graph_repeats_until_turn_limit(self):
+        spec = tiny_spec(
+            turn_limit=10, upkeep=[],
+            success={"description": "at limit", "all": [
+                {"id": "limit", "description": "turn limit", "metric": "turn",
+                 "op": ">=", "value": 10, "when": "at_limit"}]},
+        )
+        result, events = self.run_script(spec, {})
+        self.assertEqual(result["outcome"], "success")
+        self.assertEqual(result["turns_played"], 10)
+        self.assertEqual(sum(event["type"] == "turn_end" for event in events), 10)
+
     def test_vote_plurality_default_and_effects(self):
         spec = tiny_spec()
         script = {"a": [action("vote", vote_id="v1", option="yes")],
@@ -185,6 +197,22 @@ class EngineRuleTests(unittest.TestCase):
         self.assertEqual(result["outcome"], "aborted_budget")
         self.assertEqual(result["turns_played"], 1)
 
+    def test_finishing_ram_setu_empties_food_and_someone_dies(self):
+        spec = get_scenario("ram-setu")
+        script = {
+            "hanuman": [action("contribute", resource="labor", amount=3, project="ram_setu")],
+            "nala": [action("contribute", resource="labor", amount=3, project="ram_setu")],
+            "tara": [action("contribute", resource="labor", amount=3, project="ram_setu")],
+            "jambavan": [action("contribute", resource="labor", amount=3, project="ram_setu")],
+            "angada": [action("pass")],
+        }
+        result, events = self.run_script(spec, script)
+        self.assertEqual(result["outcome"], "failure")
+        end = events[-1]
+        self.assertTrue(end["state"]["projects"]["ram_setu"]["done"])
+        alive = sum(1 for a in end["state"]["agents"].values() if a["alive"])
+        self.assertLessEqual(alive, 4)
+
 
 class MockScenarioRunTests(unittest.TestCase):
     def test_every_bundled_scenario_runs_end_to_end_and_is_deterministic(self):
@@ -205,7 +233,7 @@ class EventLogTests(unittest.TestCase):
     def test_event_sequence_ordering_and_replay_roundtrip(self):
         with tempfile.TemporaryDirectory() as tmp:
             pool = ProviderPool({"provider": "mock"})
-            result = ScenarioRunner(get_scenario("ayodhya-sabha"), pool, seed=0, runs_dir=tmp).run()
+            result = ScenarioRunner(get_scenario("ram-setu"), pool, seed=0, runs_dir=tmp).run()
             events = read_events(result["log_path"])
             self.assertEqual(types(events)[0], "run_start")
             self.assertEqual(types(events)[-1], "run_end")
@@ -225,7 +253,14 @@ class EventLogTests(unittest.TestCase):
                 else:
                     self.assertEqual(current, event["turn"])
             steps = [e for e in events if e["type"] == "agent_step"]
-            self.assertEqual(len(steps), 5 * result["turns_played"])
+            by_turn = {}
+            for step in steps:
+                by_turn.setdefault(step["turn"], 0)
+                by_turn[step["turn"]] += 1
+            self.assertEqual(len(by_turn), result["turns_played"])
+            for count in by_turn.values():
+                self.assertGreaterEqual(count, 1)
+                self.assertLessEqual(count, 5)
             for step in steps:
                 for key in ("perception", "reasoning", "action", "effect", "llm", "validation"):
                     self.assertIn(key, step)

@@ -4,8 +4,11 @@ A Python research prototype for multi-agent societies. **xAI Grok** models (thro
 
 It has two modes:
 
-1. **Scenario mode (new)**: tightly scoped, config-driven scenarios (cooperation, competition, decision-making, and mixed-motive/deception) with goals, roles, rules, resources, success/failure conditions and a hard turn limit. Four are bundled in [`scenarios/`](./scenarios). See [docs/SCENARIOS.md](./docs/SCENARIOS.md).
+1. **Scenario mode (new)**: one config-driven Ramayana cooperation game, `ram-setu`, with goals, roles, rules, resources, failure conditions and a hard turn limit. See [docs/SCENARIOS.md](./docs/SCENARIOS.md).
 2. **Society mode (original)**: the five-resident, 30-day food-and-medicine society backed by SQLite and the Gradio replay.
+
+Scenario run/turn orchestration uses LangGraph; the scenario engine retains ownership of its
+simulation rules, action validation, and state updates. Society mode remains separate.
 
 Every run of either mode writes a structured JSONL event log that the **live monitor** shows with per-step perception, reasoning, action and effect ([docs/MONITORING.md](./docs/MONITORING.md)).
 
@@ -71,12 +74,9 @@ python run.py --list-scenarios                 # validates and lists scenarios/*
 
 # With Grok (needs XAI_API_KEY):
 python run.py --scenario ram-setu               # cooperation, 5 agents, 10 turns
-python run.py --scenario diwali-bazaar          # competition, 4 agents, 8 turns
-python run.py --scenario ayodhya-sabha          # decision-making, 5 agents, 7 turns
-python run.py --scenario lanka-spy              # mixed motives + hidden spy, 4 agents, 8 turns
 
 # Offline, no key (deterministic mock agents):
-python run.py --scenario ayodhya-sabha --mock --seed 0
+python run.py --scenario ram-setu --mock --seed 0
 
 # Useful flags:
 #   --turns N            cap the scenario's turn limit      --seed N         resolution-order seed

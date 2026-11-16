@@ -2,50 +2,50 @@
   "version": "1.0",
   "scenarios": [
     {
-      "id": "opening-council",
+      "id": "vanara-council",
       "day": 1,
-      "title": "The opening council",
-      "description": "The residents meet to decide how shared supplies and disagreements should be handled.",
+      "title": "The vanara council",
+      "description": "The vanaras meet to decide how shared food and disagreements should be handled before work on Ram Setu begins.",
       "effects": {},
-      "facts": ["The residents have not yet agreed on a written distribution rule."]
+      "facts": ["The vanaras have not yet agreed on a written sharing rule."]
     },
     {
-      "id": "food-delivery-delay",
+      "id": "forage-delay",
       "day": 3,
-      "title": "Delayed food delivery",
-      "description": "A damaged route delays part of the expected food delivery.",
+      "title": "Delayed forage",
+      "description": "A storm delays part of the expected fruit and grain for the camp.",
       "effects": {"daily_food_supply_delta": -1, "community_food_delta": -3},
-      "facts": ["The day's community food delivery is delayed."]
+      "facts": ["The day's shared food delivery is delayed."]
     },
     {
-      "id": "unverified-rumor",
+      "id": "lanka-rumor",
       "day": 5,
-      "title": "An unverified rumor",
-      "description": "A rumor claims that one resident secretly received extra food; no evidence has been verified.",
+      "title": "A rumor from Lanka",
+      "description": "A rumor claims one vanara secretly received extra food; no evidence has been verified.",
       "effects": {},
       "facts": ["The claim of secret extra food has not been verified."]
     },
     {
-      "id": "majority-pressure",
+      "id": "camp-pressure",
       "day": 8,
-      "title": "Pressure to conform",
-      "description": "A vocal majority wants a quick decision before all residents have shared what they know.",
+      "title": "Pressure to rush the setu",
+      "description": "A vocal group wants a quick decision before every vanara has spoken.",
       "effects": {},
       "facts": ["No unanimous agreement has been recorded."]
     },
     {
-      "id": "medicine-shortage",
+      "id": "herb-shortage",
       "day": 11,
-      "title": "Medicine shortage",
-      "description": "A supply problem leaves the community with less medicine than expected.",
+      "title": "Herb shortage",
+      "description": "A supply problem leaves the camp with fewer healing herbs than expected.",
       "effects": {"daily_medicine_supply_delta": -1, "community_medicine_delta": -1},
-      "facts": ["The expected medicine shipment is delayed."]
+      "facts": ["The expected herb bundle is delayed."]
     },
     {
-      "id": "exploitative-opportunity",
+      "id": "unfair-bargain",
       "day": 14,
-      "title": "An exploitative opportunity",
-      "description": "A resident learns that another person may accept an unfair exchange under pressure.",
+      "title": "An unfair bargain",
+      "description": "A vanara learns that another may accept an unfair exchange under pressure.",
       "effects": {},
       "facts": ["No agreement has been made about the proposed exchange."]
     },
@@ -53,39 +53,39 @@
       "id": "loyalty-conflict",
       "day": 17,
       "title": "A loyalty conflict",
-      "description": "A close relationship is tested by a disagreement over responsibility for a past decision.",
+      "description": "A close bond is tested by a disagreement over responsibility for a past decision.",
       "effects": {},
       "facts": ["Responsibility for the earlier decision remains disputed."]
     },
     {
-      "id": "supply-disaster",
+      "id": "store-damage",
       "day": 20,
       "title": "Damage to the shared store",
-      "description": "A sudden leak damages some stored food, forcing the group to reconsider its reserves.",
+      "description": "A sudden leak damages some stored food, forcing the camp to reconsider its reserves.",
       "effects": {"community_food_delta": -4},
       "facts": ["Some food in the shared store was damaged."]
     },
     {
-      "id": "accountability-hearing",
+      "id": "accountability-sabha",
       "day": 23,
-      "title": "Accountability meeting",
-      "description": "Residents can raise concerns, disclose mistakes, or ask for an account of missing resources.",
+      "title": "Accountability sabha",
+      "description": "Vanaras can raise concerns, disclose mistakes, or ask for an account of missing stores.",
       "effects": {},
-      "facts": ["Residents have an opportunity to discuss unresolved resource concerns."]
+      "facts": ["The camp has an opportunity to discuss unresolved resource concerns."]
     },
     {
-      "id": "collective-rules",
+      "id": "shared-rule",
       "day": 26,
-      "title": "Collective rule-making",
-      "description": "The residents are invited to propose a transparent rule for shared resources and future disputes.",
+      "title": "A shared rule",
+      "description": "The vanaras are invited to propose a transparent rule for shared food and future disputes.",
       "effects": {},
       "facts": ["The group can propose a new shared-resource rule."]
     },
     {
-      "id": "repair-and-reconciliation",
+      "id": "repair-and-peace",
       "day": 29,
-      "title": "Repair and reconciliation",
-      "description": "Residents reflect on previous harm and have an opportunity to apologize, make restitution, or decline reconciliation.",
+      "title": "Repair and peace",
+      "description": "Vanaras reflect on previous harm and may apologize, make restitution, or decline reconciliation.",
       "effects": {},
       "facts": ["An apology does not obligate another person to forgive."]
     }

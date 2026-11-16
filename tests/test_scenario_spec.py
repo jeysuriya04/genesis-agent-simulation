@@ -43,9 +43,9 @@ class ScenarioLoaderTests(unittest.TestCase):
 
     def test_bundled_scenarios_validate_and_cover_each_kind(self):
         scenarios = list_scenarios()
-        self.assertGreaterEqual(len(scenarios), 4)
+        self.assertEqual(set(scenarios), {"ram-setu"})
         kinds = {s["kind"] for s in scenarios.values()}
-        self.assertTrue({"cooperation", "competition", "decision-making"} <= kinds)
+        self.assertEqual(kinds, {"cooperation"})
         for spec in scenarios.values():
             self.assertGreaterEqual(spec["turn_limit"], 1)
             self.assertTrue(spec.get("success") or spec.get("failure") or spec.get("scoring"))

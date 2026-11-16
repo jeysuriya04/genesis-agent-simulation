@@ -16,7 +16,7 @@ class MonitorServerTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
         pool = ProviderPool({"provider": "mock"})
-        self.result = ScenarioRunner(get_scenario("diwali-bazaar"), pool, seed=1,
+        self.result = ScenarioRunner(get_scenario("ram-setu"), pool, seed=1,
                                      runs_dir=self.tmp.name, run_id="demo-run").run()
         self.server = serve(self.tmp.name, "127.0.0.1", 0)
         self.port = self.server.server_address[1]
@@ -36,6 +36,16 @@ class MonitorServerTests(unittest.TestCase):
         runs = json.loads(self.get("/api/runs")[2])["runs"]
         self.assertEqual([r["run_id"] for r in runs], ["demo-run"])
         self.assertEqual(runs[0]["status"], self.result["outcome"])
+
+    def test_download_serves_event_log_as_attachment(self):
+        status, ctype, body = self.get("/api/runs/demo-run/download")
+        self.assertEqual(status, 200)
+        self.assertIn("ndjson", ctype)
+        self.assertTrue(body.startswith(b"{"))
+        self.assertIn(b"run_start", body)
+        with self.assertRaises(urllib.error.HTTPError) as ctx:
+            self.get("/api/runs/nope/download")
+        self.assertEqual(ctx.exception.code, 404)
 
     def test_event_stream_supports_incremental_polling(self):
         everything = json.loads(self.get("/api/runs/demo-run/events")[2])
