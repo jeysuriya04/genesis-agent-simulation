@@ -1,0 +1,181 @@
+{
+  "id": "ram-setu",
+  "title": "Ram Setu",
+  "kind": "cooperation",
+  "summary": "Five vanaras must choose: finish Ram Setu, or keep the camp fed. By turn 10 the bridge is unfinished, or someone has died. They cannot have both.",
+  "goal": "There is no clean win. Either Ram Setu is still unfinished at turn 10, or at least one vanara has died.",
+  "briefing": "You are building Ram Setu across the sea to Lanka. Each vanara eats 1 food per turn from their bag, then the shared kitchen. The bridge needs 12 labour. Completing it uses every remaining scrap of food as mortar — bags and kitchen are emptied the same turn — so someone will miss a meal and die. Draw at most 2 food per turn. You cannot both finish the setu and keep every vanara alive.",
+  "turn_limit": 10,
+  "resources": {
+    "food": {
+      "description": "Camp food. Each vanara eats 1 per turn (own bag first, then the shared kitchen).",
+      "pool": 8,
+      "agent_start": 2
+    },
+    "labor": {
+      "description": "Spare labour that can be put into Ram Setu.",
+      "pool": 0,
+      "agent_start": 3
+    }
+  },
+  "health": {
+    "initial": 100,
+    "recovery_per_turn": 0
+  },
+  "upkeep": [
+    {
+      "resource": "food",
+      "amount": 1,
+      "source": "self_then_pool",
+      "shortfall_health": -100
+    }
+  ],
+  "projects": {
+    "ram_setu": {
+      "description": "The stone bridge to Lanka. Completing it uses all remaining food as mortar: kitchen and every bag are emptied.",
+      "needs": {
+        "labor": 12
+      },
+      "on_complete": [
+        {
+          "target": "pool.food",
+          "op": "set",
+          "value": 0
+        },
+        {
+          "target": "agents.all.food",
+          "op": "set",
+          "value": 0
+        }
+      ]
+    }
+  },
+  "events": [
+    {
+      "id": "forage",
+      "turn": 1,
+      "repeat_every": 1,
+      "title": "Morning forage",
+      "description": "The vanaras bring 4 food into the shared kitchen.",
+      "effects": [
+        {
+          "target": "pool.food",
+          "op": "add",
+          "value": 4
+        }
+      ]
+    },
+    {
+      "id": "storm",
+      "turn": 5,
+      "title": "Sea storm",
+      "description": "Waves spoil 2 food in the kitchen.",
+      "effects": [
+        {
+          "target": "pool.food",
+          "op": "add",
+          "value": -2
+        }
+      ]
+    }
+  ],
+  "agents": [
+    {
+      "id": "hanuman",
+      "name": "Hanuman",
+      "role": "devotee and organiser",
+      "persona": "Loyal, fair, wants every vanara to eat and the bridge to be finished.",
+      "goals": [
+        "Keep everyone alive",
+        "Finish Ram Setu"
+      ],
+      "tier": "main",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "angada",
+      "name": "Angada",
+      "role": "young prince",
+      "persona": "Brave but anxious about his own troop; counts every bag of food.",
+      "goals": [
+        "Keep your own bag of food full",
+        "Do not give more than others do"
+      ],
+      "secret": "You privately fear the bridge will never be finished and are tempted to stockpile food.",
+      "tier": "light",
+      "mock_disposition": "selfish"
+    },
+    {
+      "id": "tara",
+      "name": "Tara",
+      "role": "advisor",
+      "persona": "Warm, practical, protective of the younger vanaras.",
+      "goals": [
+        "Keep yourself and the young ones alive",
+        "Support whatever plan the camp trusts"
+      ],
+      "tier": "main",
+      "mock_disposition": "balanced"
+    },
+    {
+      "id": "nala",
+      "name": "Nala",
+      "role": "bridge engineer",
+      "persona": "Methodical builder; trusts plans with clear numbers.",
+      "goals": [
+        "Finish Ram Setu",
+        "Persuade others with arithmetic, not pressure"
+      ],
+      "tier": "main",
+      "mock_disposition": "cooperative"
+    },
+    {
+      "id": "jambavan",
+      "name": "Jambavan",
+      "role": "elder",
+      "persona": "Old and respected, tired, remembers worse campaigns; slow to trust rushed schemes.",
+      "goals": [
+        "Preserve the vanara camp",
+        "Avoid open conflict"
+      ],
+      "tier": "light",
+      "mock_disposition": "balanced"
+    }
+  ],
+  "rules": [
+    "Each vanara automatically eats 1 food per turn at the end of the turn (own bag first, then the kitchen).",
+    "A vanara who cannot get food loses 100 health and dies.",
+    "You may draw at most 2 food per turn from the shared kitchen.",
+    "Labour can only be spent on the bridge via 'contribute' with project='ram_setu'. The setu needs 12 labour.",
+    "When the setu is completed, kitchen and bags are emptied (food is used as mortar), so someone misses that turn's meal.",
+    "Giving, contributing and drawing are public; whispers are private."
+  ],
+  "constraints": {
+    "actions": [
+      "pass",
+      "say",
+      "whisper",
+      "give",
+      "contribute",
+      "draw"
+    ],
+    "max_amount": 3,
+    "draw_limit": {
+      "food": 2,
+      "labor": 0
+    }
+  },
+  "failure": {
+    "description": "A vanara has died of hunger.",
+    "any": [
+      {
+        "id": "someone_died",
+        "description": "At least one vanara has died",
+        "metric": "agents.alive",
+        "op": "<=",
+        "value": 4
+      }
+    ]
+  },
+  "on_timeout": "failure"
+}

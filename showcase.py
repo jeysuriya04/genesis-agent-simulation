@@ -711,7 +711,7 @@ def build_app():
                 gr.Markdown(
                     "Genesis remains the simulation source of truth. This interface "
                     "replays saved SQLite runs; opening the showcase does not make "
-                    "Groq calls or start a new experiment."
+                    "model calls or start a new experiment."
                 )
                 run_ledger = gr.Dataframe(
                     value=pd.DataFrame(
