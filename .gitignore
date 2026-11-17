@@ -10,3 +10,7 @@ __pycache__/
 /runs/
 /genesis.db
 *.jsonl.tmp
+/mlops/artifacts/*
+!/mlops/artifacts/.gitkeep
+.pytest_cache/
+

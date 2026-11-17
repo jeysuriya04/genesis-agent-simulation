@@ -1,0 +1,147 @@
+name: Genesis MLOps
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+    tags:
+      - "genesis-*-v*"
+  workflow_dispatch:
+    inputs:
+      promote_to:
+        description: "Promote latest registered ram-setu entry to this stage"
+        required: false
+        default: "staging"
+        type: choice
+        options: [staging, production]
+      release:
+        description: "Create GitHub release after promoting to production"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  gate:
+    name: validate → test → experiment → evaluate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Validate configs
+        run: python -m mlops.validate_configs
+
+      - name: Unit tests
+        run: python -m mlops.run_tests
+
+      - name: Mock experiment + evaluate
+        run: |
+          python -m mlops.pipeline \
+            --scenario ram-setu \
+            --mock \
+            --seed 0 \
+            --skip register \
+            --exp-id ci-ram-setu-${{ github.run_id }}
+
+      - name: Upload experiment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlops-artifacts-${{ github.run_id }}
+          path: |
+            mlops/artifacts/
+            runs/
+          if-no-files-found: ignore
+
+  register-staging:
+    name: register + promote staging
+    needs: gate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Pipeline through staging
+        run: |
+          python -m mlops.pipeline \
+            --scenario ram-setu \
+            --mock \
+            --seed 0 \
+            --promote staging \
+            --exp-id main-ram-setu-${{ github.run_id }}
+
+      - name: Commit registry index
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mlops/registry/index.json
+          if git diff --staged --quiet; then
+            echo "No registry changes"
+          else
+            git commit -m "chore(mlops): register ram-setu candidate and promote to staging"
+            git push
+          fi
+
+  release:
+    name: promote production + release
+    needs: gate
+    if: >
+      startsWith(github.ref, 'refs/tags/genesis-') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release == true)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest
+
+      - name: Ensure production entry
+        run: |
+          python -m mlops.pipeline \
+            --scenario ram-setu \
+            --mock \
+            --seed 0 \
+            --promote production \
+            --exp-id release-ram-setu-${{ github.run_id }}
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python -m mlops.release --scenario ram-setu --skip-gh
+          TAG=$(python -c "from mlops.register import load_index; from mlops.promote import find_entry; e=find_entry(load_index(), scenario_id='ram-setu'); print(e['tag'])")
+          NOTES="mlops/artifacts/$(python -c "from mlops.register import load_index; from mlops.promote import find_entry; e=find_entry(load_index(), scenario_id='ram-setu'); print(e['exp_id'])")/release_notes.md"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --notes-file "$NOTES"
+          else
+            gh release create "$TAG" --title "$TAG" --notes-file "$NOTES"
+          fi

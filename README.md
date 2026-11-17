@@ -187,3 +187,30 @@ The five-minute target is a performance goal, not a guarantee. A 30-day simulati
 pip install pytest
 pytest            # no API key or network needed
 ```
+
+## 9. MLOps loop
+
+Genesis ships a file-based MLOps loop under `mlops/`:
+
+**validate → test → experiment → evaluate → register → promote → release**
+
+```bash
+# Full offline gate (mock agents, no API key):
+python -m mlops.pipeline --scenario ram-setu --mock --seed 0
+
+# Promote the registered candidate through staging / production:
+python -m mlops.pipeline --scenario ram-setu --mock --seed 0 --promote staging
+python -m mlops.pipeline --scenario ram-setu --mock --seed 0 --promote production --release --dry-run-release
+
+# Individual stages:
+python -m mlops.validate_configs
+python -m mlops.run_tests
+python -m mlops.run_experiment --scenario ram-setu --mock --seed 0
+python -m mlops.evaluate --exp-id <exp_id>
+python -m mlops.register --exp-id <exp_id>
+python -m mlops.promote --to staging --exp-id <exp_id>
+python -m mlops.release --scenario ram-setu --dry-run
+```
+
+Artifacts land in `mlops/artifacts/<exp_id>/` (`manifest.json`, `metrics.json`, `decision.json`). The registry is `mlops/registry/index.json`. Gates use `mlops/thresholds/<scenario>.json` and optional `mlops/baselines/<scenario>.<provider>.json`. CI runs the mock gate on PRs/pushes via `.github/workflows/mlops.yml`.
+

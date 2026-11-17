@@ -1,0 +1,20 @@
+{
+  "scenario_id": "ram-setu",
+  "provider": "mock",
+  "seed": 0,
+  "metrics": {
+    "outcome": "timeout",
+    "turns_played": 10,
+    "calls": 50,
+    "retries": 0,
+    "flag_rate": 0.0,
+    "error_rate": 0.0
+  },
+  "tolerance": {
+    "turns_played": 0,
+    "calls": 0,
+    "retries": 0,
+    "flag_rate": 0.05,
+    "error_rate": 0.05
+  }
+}

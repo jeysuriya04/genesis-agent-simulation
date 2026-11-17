@@ -1,0 +1,11 @@
+{
+  "scenario_id": "ram-setu",
+  "allowed_outcomes": ["timeout", "success", "failure", "decided", "aborted_budget"],
+  "forbidden_outcomes": ["error"],
+  "max_retries": 5,
+  "max_cost_usd": 1.0,
+  "max_flag_rate": 0.5,
+  "max_error_rate": 0.1,
+  "min_turns_played": 1,
+  "min_calls": 1
+}
